@@ -1,3 +1,9 @@
+# Compiled binaries and batch wrappers (distributed via GitHub Releases)
+*.exe
+*.bat
+release/
+*.zip
+
 # Temporary, OS and build files
 Thumbs.db
 Desktop.ini

@@ -2,6 +2,7 @@
 
 [![Platform: Windows](https://img.shields.io/badge/Platform-Windows%2010%20%7C%2011%20%7C%20Server-0078D6.svg?logo=windows)](https://microsoft.com)
 [![PowerShell: 5.1+](https://img.shields.io/badge/PowerShell-5.1%2B-blue.svg?logo=powershell)](https://github.com/PowerShell/PowerShell)
+[![Latest Release](https://img.shields.io/github/v/release/MeXaHiK-7/IPBanGUI?logo=github)](https://github.com/MeXaHiK-7/IPBanGUI/releases/latest)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Languages: EN | UA](https://img.shields.io/badge/Language-English%20%7C%20Ukrainian-orange.svg)](#multi-language-support)
 
@@ -10,6 +11,14 @@ A full-featured, modern Windows graphical user interface (GUI) and management su
 Designed for system administrators, DevOps, and power users running Windows 10, Windows 11, or Windows Server (2012 R2, 2016, 2019, 2022, 2025).
 
 > 🇺🇦 **Українська версія документації**: доступна у файлі [README_IPBan_GUI.md](README_IPBan_GUI.md).
+
+---
+
+## Downloads & Releases
+
+👉 Pre-compiled, standalone single-file executables are available on the [**GitHub Releases**](https://github.com/MeXaHiK-7/IPBanGUI/releases/latest) page:
+* **`Setup_IPBanGUI.exe`** — Graphical installer wizard (auto-configures shortcuts, autostart, and security audit).
+* **`IPBanControlCenter.exe`** — Portable single-file launcher.
 
 ---
 
@@ -53,7 +62,7 @@ Designed for system administrators, DevOps, and power users running Windows 10, 
 ## Installation & Usage
 
 ### Option 1: Standalone Installer (Recommended)
-1. Launch **`Setup_IPBanGUI.exe`** (or `Setup_IPBan_Control_Center.bat`).
+1. Download and run **`Setup_IPBanGUI.exe`** from [**Releases**](https://github.com/MeXaHiK-7/IPBanGUI/releases/latest).
 2. The installation wizard will guide you through:
    - Selecting the installation directory (default: `C:\Program Files\IPBan Manager`).
    - Desktop and Start Menu shortcut creation.
@@ -63,9 +72,9 @@ Designed for system administrators, DevOps, and power users running Windows 10, 
 3. Registered in Windows **Add/Remove Programs** with a clean uninstaller (`Uninstall.bat` / `Uninstall.ps1`) that gracefully terminates tray processes and services.
 
 ### Option 2: Portable / Standalone Execution
-- Run **`IPBanControlCenter.exe`** (or `Run_IPBan_GUI.bat`).
+- Download and run **`IPBanControlCenter.exe`** from [**Releases**](https://github.com/MeXaHiK-7/IPBanGUI/releases/latest).
 - Automatically requests administrative elevation (UAC) if needed.
-- If run standalone without surrounding files, unpacks and runs its embedded payload automatically.
+- Runs standalone anywhere with its embedded payload.
 
 ---
 
