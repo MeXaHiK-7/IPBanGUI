@@ -1,12 +1,4 @@
-# Unrelated internal scripts & files
-WireGuardGenerator.ps1
-WireGuardUsers.7z
-outlookdisclaimer*
-users_sample.txt
-ISIDA_logo_new.png
-Run.bat
-
-# OS / Temporary / Backup files
+# Temporary, OS and build files
 Thumbs.db
 Desktop.ini
 .DS_Store
