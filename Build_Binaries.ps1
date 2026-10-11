@@ -310,6 +310,27 @@ $opt2.CompilerOptions = "/target:winexe /win32icon:`"$icoPath`" /codepage:65001"
 $cr2 = $cp.CompileAssemblyFromSource($opt2, $csharpSetup)
 if ($cr2.Errors.Count -eq 0) {
     Write-Host "✅ Скомпільовано автономний інсталятор: $setupExe" -ForegroundColor Green
+
+    # Автоматичне оновлення папки release/ та ZIP-архіву
+    $relDir = Join-Path $scriptDir "release"
+    if (-not (Test-Path $relDir)) { New-Item -ItemType Directory -Path $relDir -Force | Out-Null }
+    Copy-Item $launcherExe -Destination (Join-Path $relDir "IPBanControlCenter.exe") -Force
+    Copy-Item $setupExe -Destination (Join-Path $relDir "Setup_IPBanGUI.exe") -Force
+
+    $zipPath = Join-Path $relDir "IPBanGUI-v2.0.0.zip"
+    if (Test-Path $zipPath) { Remove-Item $zipPath -Force }
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+    $tempZipDir = Join-Path $env:TEMP ("zip_" + [Guid]::NewGuid().ToString("N"))
+    New-Item -ItemType Directory -Path $tempZipDir -Force | Out-Null
+    Copy-Item $setupExe -Destination $tempZipDir -Force
+    Copy-Item $launcherExe -Destination $tempZipDir -Force
+    $readmeFile = Join-Path $scriptDir "README.md"
+    if (Test-Path $readmeFile) { Copy-Item $readmeFile -Destination $tempZipDir -Force }
+    $licFile = Join-Path $scriptDir "LICENSE"
+    if (Test-Path $licFile) { Copy-Item $licFile -Destination $tempZipDir -Force }
+    [System.IO.Compression.ZipFile]::CreateFromDirectory($tempZipDir, $zipPath)
+    Remove-Item -Path $tempZipDir -Recurse -Force
+    Write-Host "✅ Оновлено релізні файли та ZIP-пакет: $zipPath" -ForegroundColor Green
 } else {
     Write-Host "❌ Помилка компіляції інсталятора:" -ForegroundColor Red
     $cr2.Errors | ForEach-Object { Write-Host $_.ErrorText }

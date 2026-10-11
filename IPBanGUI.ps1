@@ -27,6 +27,76 @@ $script:AlertActive = $false
 $script:AlertResetTimer = $null
 $script:TrayMonitorTimer = $null
 $script:IsExiting = $false
+$script:ManualBanTimes = @{}
+$script:CurrentBanTimeSetting = "01:00:00:00"
+
+# Підтримка читання бази ipban.sqlite через вбудований у Windows winsqlite3.dll
+$script:HasWinSqlite = (Test-Path "$env:windir\System32\winsqlite3.dll")
+if ($script:HasWinSqlite -and -not ([System.Management.Automation.PSTypeName]'IPBanSqlite').Type) {
+    try {
+        $csSqlite = @'
+using System;
+using System.Runtime.InteropServices;
+using System.Collections.Generic;
+
+public class IPBanSqlite {
+    [DllImport("winsqlite3.dll", EntryPoint = "sqlite3_open16", CharSet = CharSet.Unicode, CallingConvention = CallingConvention.Cdecl)]
+    private static extern int sqlite3_open16(string filename, out IntPtr db);
+
+    [DllImport("winsqlite3.dll", EntryPoint = "sqlite3_prepare16_v2", CharSet = CharSet.Unicode, CallingConvention = CallingConvention.Cdecl)]
+    private static extern int sqlite3_prepare16_v2(IntPtr db, string zSql, int nByte, out IntPtr ppStmt, IntPtr pzTail);
+
+    [DllImport("winsqlite3.dll", EntryPoint = "sqlite3_step", CallingConvention = CallingConvention.Cdecl)]
+    private static extern int sqlite3_step(IntPtr pStmt);
+
+    [DllImport("winsqlite3.dll", EntryPoint = "sqlite3_column_text16", CallingConvention = CallingConvention.Cdecl)]
+    private static extern IntPtr sqlite3_column_text16(IntPtr pStmt, int iCol);
+
+    [DllImport("winsqlite3.dll", EntryPoint = "sqlite3_column_int64", CallingConvention = CallingConvention.Cdecl)]
+    private static extern long sqlite3_column_int64(IntPtr pStmt, int iCol);
+
+    [DllImport("winsqlite3.dll", EntryPoint = "sqlite3_finalize", CallingConvention = CallingConvention.Cdecl)]
+    private static extern int sqlite3_finalize(IntPtr pStmt);
+
+    [DllImport("winsqlite3.dll", EntryPoint = "sqlite3_close", CallingConvention = CallingConvention.Cdecl)]
+    private static extern int sqlite3_close(IntPtr db);
+
+    private const int SQLITE_ROW = 100;
+    private const int SQLITE_OK = 0;
+
+    public static Dictionary<string, long> ReadBanDates(string dbPath) {
+        var dict = new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
+        if (string.IsNullOrEmpty(dbPath) || !System.IO.File.Exists(dbPath)) return dict;
+        IntPtr db = IntPtr.Zero;
+        if (sqlite3_open16(dbPath, out db) != SQLITE_OK || db == IntPtr.Zero) return dict;
+        try {
+            IntPtr stmt = IntPtr.Zero;
+            string sql = "SELECT IPAddress, BanDate FROM IPBan";
+            if (sqlite3_prepare16_v2(db, sql, sql.Length * 2, out stmt, IntPtr.Zero) == SQLITE_OK && stmt != IntPtr.Zero) {
+                try {
+                    while (sqlite3_step(stmt) == SQLITE_ROW) {
+                        IntPtr ptr = sqlite3_column_text16(stmt, 0);
+                        string ip = Marshal.PtrToStringUni(ptr);
+                        long banDate = sqlite3_column_int64(stmt, 1);
+                        if (!string.IsNullOrEmpty(ip)) {
+                            dict[ip] = banDate;
+                        }
+                    }
+                } finally {
+                    sqlite3_finalize(stmt);
+                }
+            }
+        } catch {}
+        finally {
+            sqlite3_close(db);
+        }
+        return dict;
+    }
+}
+'@
+        Add-Type -TypeDefinition $csSqlite -ErrorAction SilentlyContinue
+    } catch {}
+}
 
 # ------------------------------------------------------------------------------
 # Локалізація (Multi-Language: UA / EN)
@@ -64,10 +134,13 @@ $script:I18N = @{
         "BtnUnbanAll" = "Очистити всі блокування"
         "BtnExport" = "Експорт..."
         "ColIndex" = "#"
-        "ColIP" = "IP-адреса"
-        "ColRule" = "Правило брандмауера"
-        "ColAction" = "Дія"
-        "ColStatus" = "Статус"
+        "ColIP" = "IP-адреса (Whois)"
+        "ColBanTime" = "Час блокування"
+        "ColUnbanTime" = "Час розблокування"
+        "BanPermanent" = "— (Назавжди)"
+        "BanActive" = "Активне"
+        "BanPerConfig" = "За конфігом"
+        "WhitelistNote" = "— (Білий список)"
         "StatusActive" = "🟢 Активно"
         "StatusDisabled" = "⚪ Вимкнено"
         "LblNoBans" = "🟢 Активних блокувань немає (0 IP-адрес) | У білому списку брандмауера: {0} IP-адрес"
@@ -167,10 +240,13 @@ $script:I18N = @{
         "BtnUnbanAll" = "Clear All Bans"
         "BtnExport" = "Export..."
         "ColIndex" = "#"
-        "ColIP" = "IP Address"
-        "ColRule" = "Firewall Rule"
-        "ColAction" = "Action"
-        "ColStatus" = "Status"
+        "ColIP" = "IP Address (Whois)"
+        "ColBanTime" = "Ban Date & Time"
+        "ColUnbanTime" = "Unban Date & Time"
+        "BanPermanent" = "— (Permanent)"
+        "BanActive" = "Active"
+        "BanPerConfig" = "Per config"
+        "WhitelistNote" = "— (Whitelist)"
         "StatusActive" = "🟢 Active"
         "StatusDisabled" = "⚪ Disabled"
         "LblNoBans" = "🟢 No active blocks (0 IP addresses) | Firewall whitelist: {0} IP addresses"
@@ -625,6 +701,70 @@ function Get-FirewallBannedIPs {
     return ,$results
 }
 
+function Get-IPBanTimesMap {
+    $map = @{}
+    $path = Get-IPBanPath
+
+    # 1. Читання бази ipban.sqlite якщо winsqlite3 доступний
+    if ($script:HasWinSqlite -and ([System.Management.Automation.PSTypeName]'IPBanSqlite').Type) {
+        $dbPath = Join-Path $path "ipban.sqlite"
+        if (Test-Path $dbPath) {
+            try {
+                $sqliteBans = [IPBanSqlite]::ReadBanDates($dbPath)
+                foreach ($entry in $sqliteBans.GetEnumerator()) {
+                    $epochMs = $entry.Value
+                    if ($epochMs -gt 0) {
+                        $dt = [DateTimeOffset]::FromUnixTimeMilliseconds($epochMs).ToLocalTime().DateTime
+                        $map[$entry.Key] = @{
+                            BanDate = $dt
+                            Duration = $null
+                        }
+                    }
+                }
+            } catch {}
+        }
+    }
+
+    # 2. Читання logfile.txt (останні 3000 рядків)
+    $logFile = Join-Path $path "logfile.txt"
+    if (Test-Path $logFile) {
+        try {
+            $lines = Get-Content -Path $logFile -Tail 3000 -Encoding UTF8 -ErrorAction SilentlyContinue
+            foreach ($line in $lines) {
+                if ($line -match '^(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}).*?Banning ip address:\s*([^,\s]+)') {
+                    $rawTime = $matches[1]
+                    $ip = $matches[2].Trim()
+                    $dur = $null
+                    if ($line -match 'duration:\s*([0-9\.:]+)') {
+                        $dur = $matches[1].Trim()
+                    }
+                    try {
+                        $dt = [DateTime]::ParseExact($rawTime, "yyyy-MM-dd HH:mm:ss", [System.Globalization.CultureInfo]::InvariantCulture)
+                        $map[$ip] = @{
+                            BanDate = $dt
+                            Duration = $dur
+                        }
+                    } catch {}
+                }
+            }
+        } catch {}
+    }
+
+    # 3. Ручні блокування поточної сесії
+    if ($script:ManualBanTimes) {
+        foreach ($k in $script:ManualBanTimes.Keys) {
+            if (-not $map.ContainsKey($k)) {
+                $map[$k] = @{
+                    BanDate = $script:ManualBanTimes[$k]
+                    Duration = $script:CurrentBanTimeSetting
+                }
+            }
+        }
+    }
+
+    return $map
+}
+
 function Unban-IPAddress {
     param([string]$ip)
     if ([string]::IsNullOrWhiteSpace($ip)) { return $false }
@@ -667,7 +807,9 @@ function Unban-IPAddress {
 function Ban-IPAddressManual {
     param([string]$ip)
     if ([string]::IsNullOrWhiteSpace($ip)) { return $false }
-    $cleanIp = $ip.Trim()
+    $cleanIp = $ip.Trim().Replace("/255.255.255.255", "").Replace("/32", "")
+    if (-not $script:ManualBanTimes) { $script:ManualBanTimes = @{} }
+    $script:ManualBanTimes[$cleanIp] = (Get-Date)
 
     try {
         $fw = New-Object -ComObject HNetCfg.FwPolicy2
@@ -1052,16 +1194,41 @@ $dgvBanned.BorderStyle = [System.Windows.Forms.BorderStyle]::None
 $dgvBanned.RowHeadersVisible = $false
 
 [void]$dgvBanned.Columns.Add("Index", "#")
-[void]$dgvBanned.Columns.Add("IPAddress", "IP-адреса")
-[void]$dgvBanned.Columns.Add("RuleName", "Правило брандмауера")
-[void]$dgvBanned.Columns.Add("Action", "Дія")
-[void]$dgvBanned.Columns.Add("Status", "Статус")
 
-$dgvBanned.Columns["Index"].FillWeight = 15
-$dgvBanned.Columns["IPAddress"].FillWeight = 35
-$dgvBanned.Columns["RuleName"].FillWeight = 30
-$dgvBanned.Columns["Action"].FillWeight = 15
-$dgvBanned.Columns["Status"].FillWeight = 15
+$colIPLink = New-Object System.Windows.Forms.DataGridViewLinkColumn
+$colIPLink.Name = "IPAddress"
+$colIPLink.HeaderText = (T "ColIP")
+$colIPLink.LinkColor = [System.Drawing.Color]::FromArgb(29, 78, 216)
+$colIPLink.ActiveLinkColor = [System.Drawing.Color]::FromArgb(30, 58, 138)
+$colIPLink.VisitedLinkColor = [System.Drawing.Color]::FromArgb(29, 78, 216)
+$colIPLink.LinkBehavior = [System.Windows.Forms.LinkBehavior]::HoverUnderline
+[void]$dgvBanned.Columns.Add($colIPLink)
+
+[void]$dgvBanned.Columns.Add("BanDate", (T "ColBanTime"))
+[void]$dgvBanned.Columns.Add("UnbanDate", (T "ColUnbanTime"))
+
+$dgvBanned.Columns["Index"].FillWeight = 8
+$dgvBanned.Columns["IPAddress"].FillWeight = 32
+$dgvBanned.Columns["BanDate"].FillWeight = 30
+$dgvBanned.Columns["UnbanDate"].FillWeight = 30
+
+# Перевірка Whois при кліку на IP-адресу
+$dgvBanned.Add_CellContentClick({
+    param($sender, $e)
+    if ($e.RowIndex -ge 0 -and $e.ColumnIndex -eq $dgvBanned.Columns["IPAddress"].Index) {
+        $cellVal = $dgvBanned.Rows[$e.RowIndex].Cells["IPAddress"].Value
+        if ($cellVal) {
+            $ipStr = $cellVal.ToString().Trim().Replace("/255.255.255.255", "").Replace("/32", "")
+            if ($ipStr) {
+                try {
+                    [System.Diagnostics.Process]::Start("https://ipinfo.io/$ipStr") | Out-Null
+                } catch {
+                    [System.Windows.Forms.MessageBox]::Show("Не вдалося відкрити браузер: $_", "Помилка", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Warning)
+                }
+            }
+        }
+    }
+})
 
 $layoutBanned.Controls.Add($dgvBanned, 0, 1)
 
@@ -1079,12 +1246,11 @@ $lblBannedCount.Location = New-Object System.Drawing.Point(10, 10)
 $lblBannedCount.AutoSize = $true
 $panelBannedFooter.Controls.Add($lblBannedCount)
 
-# Контекстне меню для таблиці заблокованих IP
+# Контекстне меню для таблиці заблокованих IP (без Whois, оскільки IP тепер клікабельний лінк)
 $ctxBanned = New-Object System.Windows.Forms.ContextMenuStrip
 $miCopyIP = $ctxBanned.Items.Add("Копіювати IP")
 $miUnban = $ctxBanned.Items.Add("Розблокувати")
 $miWhitelist = $ctxBanned.Items.Add("Додати до Білого списку (Whitelist)")
-$miWhois = $ctxBanned.Items.Add("Перевірити Whois (ipinfo.io)")
 $dgvBanned.ContextMenuStrip = $ctxBanned
 
 # ==============================================================================
@@ -1270,6 +1436,7 @@ $tabLists.Controls.Add($layoutLists)
 $gbWhitelist = New-Object System.Windows.Forms.GroupBox
 $gbWhitelist.Text = "Білий список (Whitelist - ніколи не блокувати)"
 $gbWhitelist.Font = New-Object System.Drawing.Font("Segoe UI", 9.5, [System.Drawing.FontStyle]::Bold)
+$gbWhitelist.ForeColor = [System.Drawing.Color]::FromArgb(22, 101, 52)
 $gbWhitelist.Dock = [System.Windows.Forms.DockStyle]::Fill
 $gbWhitelist.Padding = New-Object System.Windows.Forms.Padding(10)
 $layoutLists.Controls.Add($gbWhitelist, 0, 0)
@@ -1295,6 +1462,8 @@ $txtWhitelist.Multiline = $true
 $txtWhitelist.ScrollBars = [System.Windows.Forms.ScrollBars]::Vertical
 $txtWhitelist.Dock = [System.Windows.Forms.DockStyle]::Fill
 $txtWhitelist.Font = New-Object System.Drawing.Font("Consolas", 10)
+$txtWhitelist.BackColor = [System.Drawing.Color]::FromArgb(240, 253, 244)
+$txtWhitelist.ForeColor = [System.Drawing.Color]::FromArgb(22, 101, 52)
 $layoutWhiteInner.Controls.Add($txtWhitelist, 0, 1)
 
 $panelWhiteButtons = New-Object System.Windows.Forms.FlowLayoutPanel
@@ -1321,6 +1490,7 @@ Set-SmoothButton $btnAddPublicIP 6
 $gbBlacklist = New-Object System.Windows.Forms.GroupBox
 $gbBlacklist.Text = "Чорний список (Blacklist - перманентно блокувати)"
 $gbBlacklist.Font = New-Object System.Drawing.Font("Segoe UI", 9.5, [System.Drawing.FontStyle]::Bold)
+$gbBlacklist.ForeColor = [System.Drawing.Color]::FromArgb(153, 27, 27)
 $gbBlacklist.Dock = [System.Windows.Forms.DockStyle]::Fill
 $gbBlacklist.Padding = New-Object System.Windows.Forms.Padding(10)
 $layoutLists.Controls.Add($gbBlacklist, 1, 0)
@@ -1345,6 +1515,8 @@ $txtBlacklist.Multiline = $true
 $txtBlacklist.ScrollBars = [System.Windows.Forms.ScrollBars]::Vertical
 $txtBlacklist.Dock = [System.Windows.Forms.DockStyle]::Fill
 $txtBlacklist.Font = New-Object System.Drawing.Font("Consolas", 10)
+$txtBlacklist.BackColor = [System.Drawing.Color]::FromArgb(254, 242, 242)
+$txtBlacklist.ForeColor = [System.Drawing.Color]::FromArgb(153, 27, 27)
 $layoutBlackInner.Controls.Add($txtBlacklist, 0, 1)
 
 # Нижня панель збереження списків
@@ -1663,9 +1835,8 @@ function Update-UILanguage {
     $btnExportBanned.Text = T "BtnExport"
 
     if ($dgvBanned.Columns["IPAddress"]) { $dgvBanned.Columns["IPAddress"].HeaderText = T "ColIP" }
-    if ($dgvBanned.Columns["RuleName"]) { $dgvBanned.Columns["RuleName"].HeaderText = T "ColRule" }
-    if ($dgvBanned.Columns["Action"]) { $dgvBanned.Columns["Action"].HeaderText = T "ColAction" }
-    if ($dgvBanned.Columns["Status"]) { $dgvBanned.Columns["Status"].HeaderText = T "ColStatus" }
+    if ($dgvBanned.Columns["BanDate"]) { $dgvBanned.Columns["BanDate"].HeaderText = T "ColBanTime" }
+    if ($dgvBanned.Columns["UnbanDate"]) { $dgvBanned.Columns["UnbanDate"].HeaderText = T "ColUnbanTime" }
 
     $gbGeneral.Text = T "GbGeneral"
     $lblFailedAttempts.Text = T "LblFailedAttempts"
@@ -2056,21 +2227,71 @@ function Filter-BannedGrid {
     $blockCount = @($allList | Where-Object { $_.ActionType -eq "Block" }).Count
     $allowCount = @($allList | Where-Object { $_.ActionType -eq "Allow" }).Count
 
+    # Отримуємо карту часу блокувань із БД / логів
+    $timesMap = Get-IPBanTimesMap
+
     $idx = 1
     foreach ($item in $allList) {
         if ($filterMode -eq 0 -and $item.ActionType -ne "Block") { continue }
         if ($filterMode -eq 1 -and $item.ActionType -ne "Allow") { continue }
 
         if ([string]::IsNullOrEmpty($filter) -or $item.IPAddress.Contains($filter) -or $item.RuleName.Contains($filter)) {
-            $statusStr = if ($item.Enabled) { (T "StatusActive") } else { (T "StatusDisabled") }
-            $actionLabel = if ($item.ActionType -eq "Block") { (if ($script:CurrentLang -eq "EN") { "⛔ Block" } else { "⛔ Блокування" }) } else { (if ($script:CurrentLang -eq "EN") { "⚪ Allow" } else { "⚪ Білий список" }) }
-            [void]$dgvBanned.Rows.Add(
+            $isBlock = ($item.ActionType -eq "Block")
+
+            $banDateStr = "—"
+            $unbanDateStr = "—"
+
+            if ($isBlock) {
+                $info = $timesMap[$item.IPAddress]
+                if ($info -and $info.BanDate) {
+                    $banDateStr = $info.BanDate.ToString("dd.MM.yyyy HH:mm:ss")
+                    $durStr = if ($info.Duration) { $info.Duration } else { $script:CurrentBanTimeSetting }
+                    if ($durStr -eq "00:00:00:00" -or $durStr -eq "0.00:00:00") {
+                        $unbanDateStr = (T "BanPermanent")
+                    } else {
+                        try {
+                            $ts = [TimeSpan]::Parse($durStr)
+                            $unbanDateStr = $info.BanDate.Add($ts).ToString("dd.MM.yyyy HH:mm:ss")
+                        } catch {
+                            $unbanDateStr = (T "BanPerConfig")
+                        }
+                    }
+                } else {
+                    $banDateStr = (T "BanActive")
+                    $durStr = $script:CurrentBanTimeSetting
+                    if ($durStr -eq "00:00:00:00" -or $durStr -eq "0.00:00:00") {
+                        $unbanDateStr = (T "BanPermanent")
+                    } else {
+                        $unbanDateStr = (T "BanPerConfig")
+                    }
+                }
+            } else {
+                $banDateStr = (T "WhitelistNote")
+                $unbanDateStr = "—"
+            }
+
+            $rowIdx = $dgvBanned.Rows.Add(
                 $idx,
                 $item.IPAddress,
-                $item.RuleName,
-                $actionLabel,
-                $statusStr
+                $banDateStr,
+                $unbanDateStr
             )
+            $row = $dgvBanned.Rows[$rowIdx]
+            $row.Tag = $item.ActionType
+
+            # Розділення кольором: блідо-червоний для заблокованих, блідо-зелений для білого списку
+            if ($isBlock) {
+                $row.DefaultCellStyle.BackColor = [System.Drawing.Color]::FromArgb(254, 242, 242)
+                $row.DefaultCellStyle.ForeColor = [System.Drawing.Color]::FromArgb(153, 27, 27)
+                $row.DefaultCellStyle.SelectionBackColor = [System.Drawing.Color]::FromArgb(254, 202, 202)
+                $row.DefaultCellStyle.SelectionForeColor = [System.Drawing.Color]::FromArgb(153, 27, 27)
+            } else {
+                $row.DefaultCellStyle.BackColor = [System.Drawing.Color]::FromArgb(240, 253, 244)
+                $row.DefaultCellStyle.ForeColor = [System.Drawing.Color]::FromArgb(22, 101, 52)
+                $row.DefaultCellStyle.SelectionBackColor = [System.Drawing.Color]::FromArgb(187, 247, 208)
+                $row.DefaultCellStyle.SelectionForeColor = [System.Drawing.Color]::FromArgb(22, 101, 52)
+            }
+
             $idx++
         }
     }
@@ -2115,6 +2336,7 @@ function Load-ConfigData {
 
         $valBanTime = Get-XmlKey "BanTime"
         if ($valBanTime) {
+            $script:CurrentBanTimeSetting = $valBanTime
             $txtBanTimeCustom.Text = $valBanTime
             $foundIndex = -1
             for ($i = 0; $i -lt $cbBanTimePreset.Items.Count; $i++) {
@@ -2389,8 +2611,7 @@ $btnUnbanSelected.Add_Click({
     $whitelistIps = @()
     foreach ($row in $dgvBanned.SelectedRows) {
         $ip = $row.Cells["IPAddress"].Value.ToString()
-        $act = $row.Cells["Action"].Value.ToString()
-        if ($act -like "*Whitelist*" -or $act -like "*Дозволено*") {
+        if ($row.Tag -eq "Allow") {
             $whitelistIps += $ip
         } else {
             $ipsToUnban += $ip
@@ -2493,13 +2714,19 @@ $btnExportBanned.Add_Click({
     $sfd.FileName = "IPBan_IPs_$(Get-Date -Format 'yyyyMMdd_HHmm').txt"
     if ($sfd.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
         try {
-            $filterMode = if ($cbRuleFilter -and $cbRuleFilter.SelectedIndex -ge 0) { $cbRuleFilter.SelectedIndex } else { 0 }
-            $exportList = if ($filterMode -eq 1) {
-                @($script:LastBannedIPs | Where-Object { $_.ActionType -eq "Allow" } | ForEach-Object { $_.IPAddress })
-            } elseif ($filterMode -eq 2) {
-                @($script:LastBannedIPs | ForEach-Object { "$($_.IPAddress)`t$($_.ActionLabel)`t$($_.RuleName)" })
+            $isCsv = $sfd.FileName.EndsWith(".csv", [System.StringComparison]::OrdinalIgnoreCase)
+            $exportList = @()
+            if ($isCsv) {
+                $exportList += "Index,IPAddress,BanDate,UnbanDate,Type"
+                for ($r = 0; $r -lt $dgvBanned.Rows.Count; $r++) {
+                    $row = $dgvBanned.Rows[$r]
+                    $exportList += "$($row.Cells['Index'].Value),`"$($row.Cells['IPAddress'].Value)`",`"$($row.Cells['BanDate'].Value)`",`"$($row.Cells['UnbanDate'].Value)`",`"$($row.Tag)`""
+                }
             } else {
-                @($script:LastBannedIPs | Where-Object { $_.ActionType -eq "Block" } | ForEach-Object { $_.IPAddress })
+                for ($r = 0; $r -lt $dgvBanned.Rows.Count; $r++) {
+                    $row = $dgvBanned.Rows[$r]
+                    $exportList += "$($row.Cells['IPAddress'].Value)`t$($row.Cells['BanDate'].Value)`t$($row.Cells['UnbanDate'].Value)"
+                }
             }
             $exportList | Set-Content -Path $sfd.FileName -Encoding UTF8
             [System.Windows.Forms.MessageBox]::Show("Список успішно збережено у файл!`n$($sfd.FileName)", "Експорт завершено", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Information)
@@ -2532,13 +2759,6 @@ $miWhitelist.Add_Click({
         } else {
             [System.Windows.Forms.MessageBox]::Show("IP $ip вже присутня у білому списку.", "Інформація", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Information)
         }
-    }
-})
-
-$miWhois.Add_Click({
-    if ($dgvBanned.SelectedRows.Count -gt 0) {
-        $ip = $dgvBanned.SelectedRows[0].Cells["IPAddress"].Value.ToString()
-        [System.Diagnostics.Process]::Start("https://ipinfo.io/$ip")
     }
 })
 
