@@ -120,6 +120,7 @@ $script:I18N = @{
         "BtnOpenFolder" = "Відкрити папку"
         "BtnOpenConfig" = "Відкрити конфіг"
         "TabBanned" = "  Заблоковані IP  "
+        "TabStats" = "  📊 Статистика  "
         "TabSettings" = "  Налаштування  "
         "TabLists" = "  Білий / Чорний списки  "
         "TabLogs" = "  Журнал та аудит  "
@@ -135,12 +136,32 @@ $script:I18N = @{
         "BtnExport" = "Експорт..."
         "ColIndex" = "#"
         "ColIP" = "IP-адреса (Whois)"
+        "ColCountry" = "Країна"
         "ColBanTime" = "Час блокування"
         "ColUnbanTime" = "Час розблокування"
         "BanPermanent" = "— (Назавжди)"
         "BanActive" = "Активне"
         "BanPerConfig" = "За конфігом"
         "WhitelistNote" = "— (Білий список)"
+        "CardTotalBanned" = "Всього заблоковано"
+        "CardUniqueCountries" = "Країн-джерел атак"
+        "CardTopCountry" = "Головна країна атак"
+        "CardPeakHour" = "Піковий час атак"
+        "GbCountryStats" = "Топ країн за кількістю атак"
+        "GbTimeStats" = "Розподіл атак за часом доби (24 години)"
+        "ColStatsRank" = "#"
+        "ColStatsCountry" = "Країна"
+        "ColStatsCount" = "Заблоковано IP"
+        "ColStatsShare" = "Частка"
+        "ColStatsBar" = "Активність"
+        "ColHour" = "Часовий проміжок"
+        "ColHourAttacks" = "Кількість подій"
+        "ColHourBar" = "Рівень активності"
+        "BtnRefreshStats" = "Оновити статистику"
+        "PeakNotice" = "⚠️ Найвища активність атак зафіксована у проміжку: {0}:00 - {1}:00 ({2} атак)"
+        "ResolvingCountry" = "🌐 Визначення..."
+        "LocalNetwork" = "Локальна мережа"
+        "UnknownCountry" = "Невідомо"
         "StatusActive" = "🟢 Активно"
         "StatusDisabled" = "⚪ Вимкнено"
         "LblNoBans" = "🟢 Активних блокувань немає (0 IP-адрес) | У білому списку брандмауера: {0} IP-адрес"
@@ -226,6 +247,7 @@ $script:I18N = @{
         "BtnOpenFolder" = "Open Folder"
         "BtnOpenConfig" = "Open Config"
         "TabBanned" = "  Banned IPs  "
+        "TabStats" = "  📊 Analytics  "
         "TabSettings" = "  Settings  "
         "TabLists" = "  White / Black Lists  "
         "TabLogs" = "  Logs & Audit  "
@@ -241,12 +263,32 @@ $script:I18N = @{
         "BtnExport" = "Export..."
         "ColIndex" = "#"
         "ColIP" = "IP Address (Whois)"
+        "ColCountry" = "Country"
         "ColBanTime" = "Ban Date & Time"
         "ColUnbanTime" = "Unban Date & Time"
         "BanPermanent" = "— (Permanent)"
         "BanActive" = "Active"
         "BanPerConfig" = "Per config"
         "WhitelistNote" = "— (Whitelist)"
+        "CardTotalBanned" = "Total Blocked IPs"
+        "CardUniqueCountries" = "Unique Countries"
+        "CardTopCountry" = "Top Attack Country"
+        "CardPeakHour" = "Peak Attack Hours"
+        "GbCountryStats" = "Top Attacking Countries"
+        "GbTimeStats" = "24-Hour Attack Distribution"
+        "ColStatsRank" = "#"
+        "ColStatsCountry" = "Country"
+        "ColStatsCount" = "Blocked IPs"
+        "ColStatsShare" = "Share"
+        "ColStatsBar" = "Activity"
+        "ColHour" = "Time Window"
+        "ColHourAttacks" = "Event Count"
+        "ColHourBar" = "Activity Level"
+        "BtnRefreshStats" = "Refresh Analytics"
+        "PeakNotice" = "⚠️ Peak attack activity detected at {0}:00 - {1}:00 ({2} attacks)"
+        "ResolvingCountry" = "🌐 Resolving..."
+        "LocalNetwork" = "Local Network"
+        "UnknownCountry" = "Unknown"
         "StatusActive" = "🟢 Active"
         "StatusDisabled" = "⚪ Disabled"
         "LblNoBans" = "🟢 No active blocks (0 IP addresses) | Firewall whitelist: {0} IP addresses"
@@ -765,6 +807,172 @@ function Get-IPBanTimesMap {
     return $map
 }
 
+# ==============================================================================
+# Модуль GeoIP та візуалізації аналітики
+# ==============================================================================
+$script:GeoIPCache = @{}
+$script:GeoIPPending = New-Object System.Collections.Generic.HashSet[string]
+$script:GeoIPTimer = $null
+
+function Get-GeoIPCachePath {
+    $dir = Get-IPBanPath
+    if (-not (Test-Path $dir)) {
+        $dir = Join-Path $env:LOCALAPPDATA "IPBanControlCenter"
+        if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
+    }
+    return (Join-Path $dir "geoip_cache.json")
+}
+
+function Load-GeoIPCache {
+    try {
+        $path = Get-GeoIPCachePath
+        if (Test-Path $path) {
+            $json = Get-Content -Path $path -Raw -Encoding UTF8 -ErrorAction SilentlyContinue
+            if ($json) {
+                $obj = ConvertFrom-Json $json -ErrorAction SilentlyContinue
+                if ($obj) {
+                    foreach ($prop in $obj.psobject.Properties) {
+                        $script:GeoIPCache[$prop.Name] = @{
+                            Code  = $prop.Value.Code
+                            Name  = $prop.Value.Name
+                            Emoji = $prop.Value.Emoji
+                        }
+                    }
+                }
+            }
+        }
+    } catch {}
+}
+
+function Save-GeoIPCache {
+    try {
+        $path = Get-GeoIPCachePath
+        $script:GeoIPCache | ConvertTo-Json -Compress | Set-Content -Path $path -Encoding UTF8 -Force
+    } catch {}
+}
+
+function Get-CountryFlagEmoji([string]$countryCode) {
+    if ([string]::IsNullOrWhiteSpace($countryCode) -or $countryCode.Length -ne 2) { return "🌐" }
+    $code = $countryCode.ToUpper()
+    if ($code[0] -lt 'A' -or $code[0] -gt 'Z' -or $code[1] -lt 'A' -or $code[1] -gt 'Z') { return "🌐" }
+    $high = [char]0xD83C
+    $low1 = [char](0xDDE6 + ([int][char]$code[0] - [int][char]'A'))
+    $low2 = [char](0xDDE6 + ([int][char]$code[1] - [int][char]'A'))
+    return "$high$low1$high$low2"
+}
+
+function Test-IsPrivateIP([string]$ip) {
+    if ($ip -like "10.*" -or $ip -like "192.168.*" -or $ip -like "127.*" -or $ip -eq "::1" -or $ip -eq "localhost") { return $true }
+    if ($ip -match '^172\.(1[6-9]|2[0-9]|3[0-1])\.') { return $true }
+    if ($ip -like "169.254.*") { return $true }
+    return $false
+}
+
+function Get-IPCountryInfo([string]$ip) {
+    $clean = $ip.Trim().Replace("/255.255.255.255", "").Replace("/32", "")
+    if ([string]::IsNullOrWhiteSpace($clean)) { return $null }
+    if (Test-IsPrivateIP $clean) {
+        return @{
+            Code  = "LAN"
+            Name  = (T "LocalNetwork")
+            Emoji = "🏠"
+        }
+    }
+    if ($script:GeoIPCache.ContainsKey($clean)) {
+        return $script:GeoIPCache[$clean]
+    }
+    return $null
+}
+
+function Get-VisualBar([double]$percent, [int]$maxBlocks = 12) {
+    if ($percent -le 0) { return ([string][char]0x2591 * $maxBlocks) }
+    $filled = [Math]::Min($maxBlocks, [Math]::Max(1, [int][Math]::Round(($percent / 100.0) * $maxBlocks)))
+    $empty = $maxBlocks - $filled
+    return (([string][char]0x2588 * $filled) + ([string][char]0x2591 * $empty))
+}
+
+function Resolve-NextPendingGeoIP {
+    if ($script:GeoIPPending.Count -eq 0) { return }
+    $batch = @()
+    foreach ($item in $script:GeoIPPending) {
+        $batch += $item
+        if ($batch.Count -ge 5) { break }
+    }
+
+    $resolvedAny = $false
+    foreach ($ip in $batch) {
+        $script:GeoIPPending.Remove($ip) | Out-Null
+        if (Test-IsPrivateIP $ip) {
+            $script:GeoIPCache[$ip] = @{
+                Code  = "LAN"
+                Name  = (T "LocalNetwork")
+                Emoji = "🏠"
+            }
+            $resolvedAny = $true
+            continue
+        }
+        try {
+            $url = "http://ip-api.com/json/$ip`?fields=status,country,countryCode"
+            $res = Invoke-RestMethod -Uri $url -TimeoutSec 2 -ErrorAction Stop
+            if ($res -and $res.status -eq "success") {
+                $code = $res.countryCode
+                $name = $res.country
+                $emoji = Get-CountryFlagEmoji $code
+                $script:GeoIPCache[$ip] = @{
+                    Code  = $code
+                    Name  = $name
+                    Emoji = $emoji
+                }
+                $resolvedAny = $true
+            } else {
+                # Запасний варіант через api.country.is
+                $res2 = Invoke-RestMethod -Uri "https://api.country.is/$ip" -TimeoutSec 2 -ErrorAction Stop
+                if ($res2 -and $res2.country) {
+                    $code = $res2.country
+                    $emoji = Get-CountryFlagEmoji $code
+                    $script:GeoIPCache[$ip] = @{
+                        Code  = $code
+                        Name  = $code
+                        Emoji = $emoji
+                    }
+                    $resolvedAny = $true
+                }
+            }
+        } catch {
+            # Якщо мережа тимчасово недоступна, позначимо Unknown
+            $script:GeoIPCache[$ip] = @{
+                Code  = "??"
+                Name  = (T "UnknownCountry")
+                Emoji = "🌐"
+            }
+        }
+    }
+
+    if ($resolvedAny) {
+        # Оновлення видимих комірок таблиці $dgvBanned
+        if ($dgvBanned -and $dgvBanned.Columns["Country"]) {
+            $cIdx = $dgvBanned.Columns["Country"].Index
+            for ($r = 0; $r -lt $dgvBanned.Rows.Count; $r++) {
+                $row = $dgvBanned.Rows[$r]
+                $cellIp = $row.Cells["IPAddress"].Value
+                if ($cellIp) {
+                    $clean = $cellIp.ToString().Trim().Replace("/255.255.255.255", "").Replace("/32", "")
+                    if ($script:GeoIPCache.ContainsKey($clean)) {
+                        $geo = $script:GeoIPCache[$clean]
+                        $namePart = if ($geo.Name -and $geo.Code -ne $geo.Name) { " - " + $geo.Name } else { "" }
+                        $row.Cells[$cIdx].Value = "$($geo.Emoji) $($geo.Code)$namePart"
+                    }
+                }
+            }
+        }
+        Save-GeoIPCache
+        # Якщо відкрито вкладку статистики, оновити її дані
+        if ($tabControl -and $tabControl.SelectedTab -eq $tabStats) {
+            Update-StatsUI
+        }
+    }
+}
+
 function Unban-IPAddress {
     param([string]$ip)
     if ([string]::IsNullOrWhiteSpace($ip)) { return $false }
@@ -1204,13 +1412,15 @@ $colIPLink.VisitedLinkColor = [System.Drawing.Color]::FromArgb(29, 78, 216)
 $colIPLink.LinkBehavior = [System.Windows.Forms.LinkBehavior]::HoverUnderline
 [void]$dgvBanned.Columns.Add($colIPLink)
 
+[void]$dgvBanned.Columns.Add("Country", (T "ColCountry"))
 [void]$dgvBanned.Columns.Add("BanDate", (T "ColBanTime"))
 [void]$dgvBanned.Columns.Add("UnbanDate", (T "ColUnbanTime"))
 
-$dgvBanned.Columns["Index"].FillWeight = 8
-$dgvBanned.Columns["IPAddress"].FillWeight = 32
-$dgvBanned.Columns["BanDate"].FillWeight = 30
-$dgvBanned.Columns["UnbanDate"].FillWeight = 30
+$dgvBanned.Columns["Index"].FillWeight = 6
+$dgvBanned.Columns["IPAddress"].FillWeight = 24
+$dgvBanned.Columns["Country"].FillWeight = 24
+$dgvBanned.Columns["BanDate"].FillWeight = 23
+$dgvBanned.Columns["UnbanDate"].FillWeight = 23
 
 # Перевірка Whois при кліку на IP-адресу
 $dgvBanned.Add_CellContentClick({
@@ -1254,7 +1464,267 @@ $miWhitelist = $ctxBanned.Items.Add("Додати до Білого списку
 $dgvBanned.ContextMenuStrip = $ctxBanned
 
 # ==============================================================================
-# ВКЛАДКА 2: Налаштування блокування (Конфігурація)
+# ВКЛАДКА 2: Статистика атак (GeoIP та розподіл за часом)
+# ==============================================================================
+$tabStats = New-Object System.Windows.Forms.TabPage
+$tabStats.Text = (T "TabStats")
+$tabStats.BackColor = [System.Drawing.Color]::White
+$tabControl.TabPages.Add($tabStats)
+
+$layoutStats = New-Object System.Windows.Forms.TableLayoutPanel
+$layoutStats.Dock = [System.Windows.Forms.DockStyle]::Fill
+$layoutStats.RowCount = 3
+$layoutStats.ColumnCount = 1
+$layoutStats.RowStyles.Add((New-Object System.Windows.Forms.RowStyle([System.Windows.Forms.SizeType]::Absolute, 85)))
+$layoutStats.RowStyles.Add((New-Object System.Windows.Forms.RowStyle([System.Windows.Forms.SizeType]::Percent, 100)))
+$layoutStats.RowStyles.Add((New-Object System.Windows.Forms.RowStyle([System.Windows.Forms.SizeType]::Absolute, 45)))
+$tabStats.Controls.Add($layoutStats)
+
+# --- Рядок 0: KPI картки (4 шт) ---
+$panelKpis = New-Object System.Windows.Forms.TableLayoutPanel
+$panelKpis.Dock = [System.Windows.Forms.DockStyle]::Fill
+$panelKpis.RowCount = 1
+$panelKpis.ColumnCount = 4
+$panelKpis.ColumnStyles.Add((New-Object System.Windows.Forms.ColumnStyle([System.Windows.Forms.SizeType]::Percent, 25)))
+$panelKpis.ColumnStyles.Add((New-Object System.Windows.Forms.ColumnStyle([System.Windows.Forms.SizeType]::Percent, 25)))
+$panelKpis.ColumnStyles.Add((New-Object System.Windows.Forms.ColumnStyle([System.Windows.Forms.SizeType]::Percent, 25)))
+$panelKpis.ColumnStyles.Add((New-Object System.Windows.Forms.ColumnStyle([System.Windows.Forms.SizeType]::Percent, 25)))
+$panelKpis.Padding = New-Object System.Windows.Forms.Padding(10, 8, 10, 6)
+$layoutStats.Controls.Add($panelKpis, 0, 0)
+
+# Card 1: Всього заблоковано
+$cardTotalBanned = New-Object System.Windows.Forms.Panel
+$cardTotalBanned.Dock = [System.Windows.Forms.DockStyle]::Fill
+$cardTotalBanned.BackColor = [System.Drawing.Color]::FromArgb(239, 246, 255)
+$cardTotalBanned.BorderStyle = [System.Windows.Forms.BorderStyle]::FixedSingle
+$cardTotalBanned.Margin = New-Object System.Windows.Forms.Padding(4)
+$cardTotalBanned.Padding = New-Object System.Windows.Forms.Padding(8, 4, 8, 4)
+
+$lblCardTotalBannedTitle = New-Object System.Windows.Forms.Label
+$lblCardTotalBannedTitle.Text = (T "CardTotalBanned")
+$lblCardTotalBannedTitle.Font = New-Object System.Drawing.Font("Segoe UI", 8.5)
+$lblCardTotalBannedTitle.ForeColor = [System.Drawing.Color]::FromArgb(71, 85, 105)
+$lblCardTotalBannedTitle.Dock = [System.Windows.Forms.DockStyle]::Top
+$lblCardTotalBannedTitle.Height = 18
+
+$lblCardTotalBannedVal = New-Object System.Windows.Forms.Label
+$lblCardTotalBannedVal.Text = "0"
+$lblCardTotalBannedVal.Font = New-Object System.Drawing.Font("Segoe UI", 16, [System.Drawing.FontStyle]::Bold)
+$lblCardTotalBannedVal.ForeColor = [System.Drawing.Color]::FromArgb(30, 64, 175)
+$lblCardTotalBannedVal.Dock = [System.Windows.Forms.DockStyle]::Fill
+$lblCardTotalBannedVal.TextAlign = [System.Drawing.ContentAlignment]::MiddleLeft
+
+$cardTotalBanned.Controls.Add($lblCardTotalBannedVal)
+$cardTotalBanned.Controls.Add($lblCardTotalBannedTitle)
+$panelKpis.Controls.Add($cardTotalBanned, 0, 0)
+
+# Card 2: Унікальних країн
+$cardUniqueCountries = New-Object System.Windows.Forms.Panel
+$cardUniqueCountries.Dock = [System.Windows.Forms.DockStyle]::Fill
+$cardUniqueCountries.BackColor = [System.Drawing.Color]::FromArgb(236, 253, 245)
+$cardUniqueCountries.BorderStyle = [System.Windows.Forms.BorderStyle]::FixedSingle
+$cardUniqueCountries.Margin = New-Object System.Windows.Forms.Padding(4)
+$cardUniqueCountries.Padding = New-Object System.Windows.Forms.Padding(8, 4, 8, 4)
+
+$lblCardUniqueCountriesTitle = New-Object System.Windows.Forms.Label
+$lblCardUniqueCountriesTitle.Text = (T "CardUniqueCountries")
+$lblCardUniqueCountriesTitle.Font = New-Object System.Drawing.Font("Segoe UI", 8.5)
+$lblCardUniqueCountriesTitle.ForeColor = [System.Drawing.Color]::FromArgb(71, 85, 105)
+$lblCardUniqueCountriesTitle.Dock = [System.Windows.Forms.DockStyle]::Top
+$lblCardUniqueCountriesTitle.Height = 18
+
+$lblCardUniqueCountriesVal = New-Object System.Windows.Forms.Label
+$lblCardUniqueCountriesVal.Text = "0"
+$lblCardUniqueCountriesVal.Font = New-Object System.Drawing.Font("Segoe UI", 16, [System.Drawing.FontStyle]::Bold)
+$lblCardUniqueCountriesVal.ForeColor = [System.Drawing.Color]::FromArgb(6, 95, 70)
+$lblCardUniqueCountriesVal.Dock = [System.Windows.Forms.DockStyle]::Fill
+$lblCardUniqueCountriesVal.TextAlign = [System.Drawing.ContentAlignment]::MiddleLeft
+
+$cardUniqueCountries.Controls.Add($lblCardUniqueCountriesVal)
+$cardUniqueCountries.Controls.Add($lblCardUniqueCountriesTitle)
+$panelKpis.Controls.Add($cardUniqueCountries, 1, 0)
+
+# Card 3: Топ-країна атак
+$cardTopCountry = New-Object System.Windows.Forms.Panel
+$cardTopCountry.Dock = [System.Windows.Forms.DockStyle]::Fill
+$cardTopCountry.BackColor = [System.Drawing.Color]::FromArgb(255, 241, 242)
+$cardTopCountry.BorderStyle = [System.Windows.Forms.BorderStyle]::FixedSingle
+$cardTopCountry.Margin = New-Object System.Windows.Forms.Padding(4)
+$cardTopCountry.Padding = New-Object System.Windows.Forms.Padding(8, 4, 8, 4)
+
+$lblCardTopCountryTitle = New-Object System.Windows.Forms.Label
+$lblCardTopCountryTitle.Text = (T "CardTopCountry")
+$lblCardTopCountryTitle.Font = New-Object System.Drawing.Font("Segoe UI", 8.5)
+$lblCardTopCountryTitle.ForeColor = [System.Drawing.Color]::FromArgb(71, 85, 105)
+$lblCardTopCountryTitle.Dock = [System.Windows.Forms.DockStyle]::Top
+$lblCardTopCountryTitle.Height = 18
+
+$lblCardTopCountryVal = New-Object System.Windows.Forms.Label
+$lblCardTopCountryVal.Text = "—"
+$lblCardTopCountryVal.Font = New-Object System.Drawing.Font("Segoe UI", 13, [System.Drawing.FontStyle]::Bold)
+$lblCardTopCountryVal.ForeColor = [System.Drawing.Color]::FromArgb(159, 18, 57)
+$lblCardTopCountryVal.Dock = [System.Windows.Forms.DockStyle]::Fill
+$lblCardTopCountryVal.TextAlign = [System.Drawing.ContentAlignment]::MiddleLeft
+
+$cardTopCountry.Controls.Add($lblCardTopCountryVal)
+$cardTopCountry.Controls.Add($lblCardTopCountryTitle)
+$panelKpis.Controls.Add($cardTopCountry, 2, 0)
+
+# Card 4: Піковий час атак
+$cardPeakHour = New-Object System.Windows.Forms.Panel
+$cardPeakHour.Dock = [System.Windows.Forms.DockStyle]::Fill
+$cardPeakHour.BackColor = [System.Drawing.Color]::FromArgb(255, 251, 235)
+$cardPeakHour.BorderStyle = [System.Windows.Forms.BorderStyle]::FixedSingle
+$cardPeakHour.Margin = New-Object System.Windows.Forms.Padding(4)
+$cardPeakHour.Padding = New-Object System.Windows.Forms.Padding(8, 4, 8, 4)
+
+$lblCardPeakHourTitle = New-Object System.Windows.Forms.Label
+$lblCardPeakHourTitle.Text = (T "CardPeakHour")
+$lblCardPeakHourTitle.Font = New-Object System.Drawing.Font("Segoe UI", 8.5)
+$lblCardPeakHourTitle.ForeColor = [System.Drawing.Color]::FromArgb(71, 85, 105)
+$lblCardPeakHourTitle.Dock = [System.Windows.Forms.DockStyle]::Top
+$lblCardPeakHourTitle.Height = 18
+
+$lblCardPeakHourVal = New-Object System.Windows.Forms.Label
+$lblCardPeakHourVal.Text = "—"
+$lblCardPeakHourVal.Font = New-Object System.Drawing.Font("Segoe UI", 15, [System.Drawing.FontStyle]::Bold)
+$lblCardPeakHourVal.ForeColor = [System.Drawing.Color]::FromArgb(146, 64, 14)
+$lblCardPeakHourVal.Dock = [System.Windows.Forms.DockStyle]::Fill
+$lblCardPeakHourVal.TextAlign = [System.Drawing.ContentAlignment]::MiddleLeft
+
+$cardPeakHour.Controls.Add($lblCardPeakHourVal)
+$cardPeakHour.Controls.Add($lblCardPeakHourTitle)
+$panelKpis.Controls.Add($cardPeakHour, 3, 0)
+
+# --- Рядок 1: Головна область (2 колонки: Країни ліворуч, Години праворуч) ---
+$panelStatsBody = New-Object System.Windows.Forms.TableLayoutPanel
+$panelStatsBody.Dock = [System.Windows.Forms.DockStyle]::Fill
+$panelStatsBody.RowCount = 1
+$panelStatsBody.ColumnCount = 2
+$panelStatsBody.ColumnStyles.Add((New-Object System.Windows.Forms.ColumnStyle([System.Windows.Forms.SizeType]::Percent, 50)))
+$panelStatsBody.ColumnStyles.Add((New-Object System.Windows.Forms.ColumnStyle([System.Windows.Forms.SizeType]::Percent, 50)))
+$panelStatsBody.Padding = New-Object System.Windows.Forms.Padding(10, 0, 10, 6)
+$layoutStats.Controls.Add($panelStatsBody, 0, 1)
+
+# Ліва група: Топ-країни атак
+$gbCountryStats = New-Object System.Windows.Forms.GroupBox
+$gbCountryStats.Text = (T "GbCountryStats")
+$gbCountryStats.Dock = [System.Windows.Forms.DockStyle]::Fill
+$gbCountryStats.Font = New-Object System.Drawing.Font("Segoe UI", 9.5, [System.Drawing.FontStyle]::Bold)
+$gbCountryStats.ForeColor = [System.Drawing.Color]::FromArgb(30, 41, 59)
+$gbCountryStats.Padding = New-Object System.Windows.Forms.Padding(8)
+$panelStatsBody.Controls.Add($gbCountryStats, 0, 0)
+
+$dgvCountryStats = New-Object System.Windows.Forms.DataGridView
+$dgvCountryStats.Dock = [System.Windows.Forms.DockStyle]::Fill
+$dgvCountryStats.ReadOnly = $true
+$dgvCountryStats.AllowUserToAddRows = $false
+$dgvCountryStats.AllowUserToDeleteRows = $false
+$dgvCountryStats.SelectionMode = [System.Windows.Forms.DataGridViewSelectionMode]::FullRowSelect
+$dgvCountryStats.MultiSelect = $false
+$dgvCountryStats.AutoSizeColumnsMode = [System.Windows.Forms.DataGridViewAutoSizeColumnsMode]::Fill
+$dgvCountryStats.BackgroundColor = [System.Drawing.Color]::White
+$dgvCountryStats.BorderStyle = [System.Windows.Forms.BorderStyle]::None
+$dgvCountryStats.RowHeadersVisible = $false
+$dgvCountryStats.Font = New-Object System.Drawing.Font("Segoe UI", 9, [System.Drawing.FontStyle]::Regular)
+
+[void]$dgvCountryStats.Columns.Add("Rank", (T "ColStatsRank"))
+[void]$dgvCountryStats.Columns.Add("Country", (T "ColStatsCountry"))
+[void]$dgvCountryStats.Columns.Add("Count", (T "ColStatsCount"))
+[void]$dgvCountryStats.Columns.Add("Share", (T "ColStatsShare"))
+[void]$dgvCountryStats.Columns.Add("Bar", (T "ColStatsBar"))
+
+$dgvCountryStats.Columns["Rank"].FillWeight = 8
+$dgvCountryStats.Columns["Country"].FillWeight = 42
+$dgvCountryStats.Columns["Count"].FillWeight = 16
+$dgvCountryStats.Columns["Share"].FillWeight = 14
+$dgvCountryStats.Columns["Bar"].FillWeight = 20
+$dgvCountryStats.Columns["Rank"].DefaultCellStyle.Alignment = [System.Windows.Forms.DataGridViewContentAlignment]::MiddleCenter
+$dgvCountryStats.Columns["Count"].DefaultCellStyle.Alignment = [System.Windows.Forms.DataGridViewContentAlignment]::MiddleCenter
+$dgvCountryStats.Columns["Share"].DefaultCellStyle.Alignment = [System.Windows.Forms.DataGridViewContentAlignment]::MiddleCenter
+$gbCountryStats.Controls.Add($dgvCountryStats)
+
+# Права група: Розподіл атак за 24 години
+$gbTimeStats = New-Object System.Windows.Forms.GroupBox
+$gbTimeStats.Text = (T "GbTimeStats")
+$gbTimeStats.Dock = [System.Windows.Forms.DockStyle]::Fill
+$gbTimeStats.Font = New-Object System.Drawing.Font("Segoe UI", 9.5, [System.Drawing.FontStyle]::Bold)
+$gbTimeStats.ForeColor = [System.Drawing.Color]::FromArgb(30, 41, 59)
+$gbTimeStats.Padding = New-Object System.Windows.Forms.Padding(8)
+$panelStatsBody.Controls.Add($gbTimeStats, 1, 0)
+
+$panelTimeContainer = New-Object System.Windows.Forms.TableLayoutPanel
+$panelTimeContainer.Dock = [System.Windows.Forms.DockStyle]::Fill
+$panelTimeContainer.RowCount = 2
+$panelTimeContainer.ColumnCount = 1
+$panelTimeContainer.RowStyles.Add((New-Object System.Windows.Forms.RowStyle([System.Windows.Forms.SizeType]::AutoSize)))
+$panelTimeContainer.RowStyles.Add((New-Object System.Windows.Forms.RowStyle([System.Windows.Forms.SizeType]::Percent, 100)))
+$gbTimeStats.Controls.Add($panelTimeContainer)
+
+$lblPeakBanner = New-Object System.Windows.Forms.Label
+$lblPeakBanner.Dock = [System.Windows.Forms.DockStyle]::Fill
+$lblPeakBanner.BackColor = [System.Drawing.Color]::FromArgb(254, 242, 242)
+$lblPeakBanner.ForeColor = [System.Drawing.Color]::FromArgb(185, 28, 28)
+$lblPeakBanner.Font = New-Object System.Drawing.Font("Segoe UI", 9, [System.Drawing.FontStyle]::Bold)
+$lblPeakBanner.Padding = New-Object System.Windows.Forms.Padding(6)
+$lblPeakBanner.Margin = New-Object System.Windows.Forms.Padding(0, 0, 0, 6)
+$lblPeakBanner.Visible = $false
+$lblPeakBanner.TextAlign = [System.Drawing.ContentAlignment]::MiddleLeft
+$panelTimeContainer.Controls.Add($lblPeakBanner, 0, 0)
+
+$dgvTimeStats = New-Object System.Windows.Forms.DataGridView
+$dgvTimeStats.Dock = [System.Windows.Forms.DockStyle]::Fill
+$dgvTimeStats.ReadOnly = $true
+$dgvTimeStats.AllowUserToAddRows = $false
+$dgvTimeStats.AllowUserToDeleteRows = $false
+$dgvTimeStats.SelectionMode = [System.Windows.Forms.DataGridViewSelectionMode]::FullRowSelect
+$dgvTimeStats.MultiSelect = $false
+$dgvTimeStats.AutoSizeColumnsMode = [System.Windows.Forms.DataGridViewAutoSizeColumnsMode]::Fill
+$dgvTimeStats.BackgroundColor = [System.Drawing.Color]::White
+$dgvTimeStats.BorderStyle = [System.Windows.Forms.BorderStyle]::None
+$dgvTimeStats.RowHeadersVisible = $false
+$dgvTimeStats.Font = New-Object System.Drawing.Font("Segoe UI", 9, [System.Drawing.FontStyle]::Regular)
+
+[void]$dgvTimeStats.Columns.Add("Hour", (T "ColHour"))
+[void]$dgvTimeStats.Columns.Add("Count", (T "ColHourAttacks"))
+[void]$dgvTimeStats.Columns.Add("Bar", (T "ColHourBar"))
+
+$dgvTimeStats.Columns["Hour"].FillWeight = 26
+$dgvTimeStats.Columns["Count"].FillWeight = 22
+$dgvTimeStats.Columns["Bar"].FillWeight = 52
+$dgvTimeStats.Columns["Hour"].DefaultCellStyle.Alignment = [System.Windows.Forms.DataGridViewContentAlignment]::MiddleCenter
+$dgvTimeStats.Columns["Count"].DefaultCellStyle.Alignment = [System.Windows.Forms.DataGridViewContentAlignment]::MiddleCenter
+$panelTimeContainer.Controls.Add($dgvTimeStats, 0, 1)
+
+# --- Рядок 2: Нижня панель (Кнопка оновлення та статус) ---
+$panelStatsFooter = New-Object System.Windows.Forms.Panel
+$panelStatsFooter.Dock = [System.Windows.Forms.DockStyle]::Fill
+$panelStatsFooter.Padding = New-Object System.Windows.Forms.Padding(10, 6, 10, 6)
+$layoutStats.Controls.Add($panelStatsFooter, 0, 2)
+
+$btnRefreshStats = New-Object System.Windows.Forms.Button
+$btnRefreshStats.Text = (T "BtnRefreshStats")
+$btnRefreshStats.Location = New-Object System.Drawing.Point(10, 6)
+$btnRefreshStats.Size = New-Object System.Drawing.Size(185, 30)
+$btnRefreshStats.BackColor = [System.Drawing.Color]::FromArgb(241, 245, 249)
+$panelStatsFooter.Controls.Add($btnRefreshStats)
+Set-SmoothButton $btnRefreshStats 6
+
+$lblStatsStatus = New-Object System.Windows.Forms.Label
+$lblStatsStatus.Text = ""
+$lblStatsStatus.Location = New-Object System.Drawing.Point(205, 12)
+$lblStatsStatus.AutoSize = $true
+$lblStatsStatus.Font = New-Object System.Drawing.Font("Segoe UI", 9)
+$lblStatsStatus.ForeColor = [System.Drawing.Color]::FromArgb(100, 116, 139)
+$panelStatsFooter.Controls.Add($lblStatsStatus)
+
+$btnRefreshStats.Add_Click({
+    Update-StatsUI
+    $lblStatsStatus.Text = if ($script:CurrentLang -eq "EN") { "Updated at $(Get-Date -Format 'HH:mm:ss')" } else { "Оновлено о $(Get-Date -Format 'HH:mm:ss')" }
+})
+
+# ==============================================================================
+# ВКЛАДКА 3: Налаштування блокування (Конфігурація)
 # ==============================================================================
 $tabSettings = New-Object System.Windows.Forms.TabPage
 $tabSettings.Text = "  Налаштування  "
@@ -1815,6 +2285,7 @@ function Update-UILanguage {
     $btnOpenConfigFile.Text = T "BtnOpenConfig"
 
     $tabBanned.Text = T "TabBanned"
+    if ($tabStats) { $tabStats.Text = T "TabStats" }
     $tabSettings.Text = T "TabSettings"
     $tabLists.Text = T "TabLists"
     $tabLogs.Text = T "TabLogs"
@@ -1835,8 +2306,29 @@ function Update-UILanguage {
     $btnExportBanned.Text = T "BtnExport"
 
     if ($dgvBanned.Columns["IPAddress"]) { $dgvBanned.Columns["IPAddress"].HeaderText = T "ColIP" }
+    if ($dgvBanned.Columns["Country"]) { $dgvBanned.Columns["Country"].HeaderText = T "ColCountry" }
     if ($dgvBanned.Columns["BanDate"]) { $dgvBanned.Columns["BanDate"].HeaderText = T "ColBanTime" }
     if ($dgvBanned.Columns["UnbanDate"]) { $dgvBanned.Columns["UnbanDate"].HeaderText = T "ColUnbanTime" }
+
+    if ($gbCountryStats) { $gbCountryStats.Text = T "GbCountryStats" }
+    if ($gbTimeStats) { $gbTimeStats.Text = T "GbTimeStats" }
+    if ($btnRefreshStats) { $btnRefreshStats.Text = T "BtnRefreshStats" }
+    if ($lblCardTotalBannedTitle) { $lblCardTotalBannedTitle.Text = T "CardTotalBanned" }
+    if ($lblCardUniqueCountriesTitle) { $lblCardUniqueCountriesTitle.Text = T "CardUniqueCountries" }
+    if ($lblCardTopCountryTitle) { $lblCardTopCountryTitle.Text = T "CardTopCountry" }
+    if ($lblCardPeakHourTitle) { $lblCardPeakHourTitle.Text = T "CardPeakHour" }
+    if ($dgvCountryStats) {
+        if ($dgvCountryStats.Columns["Rank"]) { $dgvCountryStats.Columns["Rank"].HeaderText = T "ColStatsRank" }
+        if ($dgvCountryStats.Columns["Country"]) { $dgvCountryStats.Columns["Country"].HeaderText = T "ColStatsCountry" }
+        if ($dgvCountryStats.Columns["Count"]) { $dgvCountryStats.Columns["Count"].HeaderText = T "ColStatsCount" }
+        if ($dgvCountryStats.Columns["Share"]) { $dgvCountryStats.Columns["Share"].HeaderText = T "ColStatsShare" }
+        if ($dgvCountryStats.Columns["Bar"]) { $dgvCountryStats.Columns["Bar"].HeaderText = T "ColStatsBar" }
+    }
+    if ($dgvTimeStats) {
+        if ($dgvTimeStats.Columns["Hour"]) { $dgvTimeStats.Columns["Hour"].HeaderText = T "ColHour" }
+        if ($dgvTimeStats.Columns["Count"]) { $dgvTimeStats.Columns["Count"].HeaderText = T "ColHourAttacks" }
+        if ($dgvTimeStats.Columns["Bar"]) { $dgvTimeStats.Columns["Bar"].HeaderText = T "ColHourBar" }
+    }
 
     $gbGeneral.Text = T "GbGeneral"
     $lblFailedAttempts.Text = T "LblFailedAttempts"
@@ -2187,6 +2679,7 @@ function Refresh-BannedIPs {
     try {
         $script:LastBannedIPs = Get-FirewallBannedIPs
         Filter-BannedGrid
+        Update-StatsUI
         $blockCount = @($script:LastBannedIPs | Where-Object { $_.ActionType -eq "Block" }).Count
         $allowCount = @($script:LastBannedIPs | Where-Object { $_.ActionType -eq "Allow" }).Count
         $statusLabel.Text = if ($script:CurrentLang -eq "EN") { "Rules refreshed. Blocked: $blockCount | Whitelisted: $allowCount" } else { "Правила оновлено. Заблоковано: $blockCount | У білому списку: $allowCount" }
@@ -2270,9 +2763,23 @@ function Filter-BannedGrid {
                 $unbanDateStr = "—"
             }
 
+            $cleanIp = $item.IPAddress.Trim().Replace("/255.255.255.255", "").Replace("/32", "")
+            $countryStr = "—"
+            if ($isBlock) {
+                $geo = Get-IPCountryInfo $cleanIp
+                if ($geo) {
+                    $namePart = if ($geo.Name -and $geo.Code -ne $geo.Name) { " - " + $geo.Name } else { "" }
+                    $countryStr = "$($geo.Emoji) $($geo.Code)$namePart"
+                } else {
+                    $countryStr = (T "ResolvingCountry")
+                    $script:GeoIPPending.Add($cleanIp) | Out-Null
+                }
+            }
+
             $rowIdx = $dgvBanned.Rows.Add(
                 $idx,
                 $item.IPAddress,
+                $countryStr,
                 $banDateStr,
                 $unbanDateStr
             )
@@ -2310,6 +2817,133 @@ function Filter-BannedGrid {
     } else {
         $lblBannedCount.Text = [string]::Format((T "LblAllRulesCount"), $allList.Count, $dgvBanned.Rows.Count)
         $lblBannedCount.ForeColor = [System.Drawing.Color]::FromArgb(51, 65, 85)
+    }
+}
+
+function Update-StatsUI {
+    if (-not $dgvCountryStats -or -not $dgvTimeStats) { return }
+
+    $allList = @($script:LastBannedIPs | Where-Object { $_.ActionType -eq "Block" })
+    $totalBanned = $allList.Count
+
+    # 1. Розподіл по країнах
+    $countryMap = @{}
+
+    foreach ($item in $allList) {
+        $clean = $item.IPAddress.Trim().Replace("/255.255.255.255", "").Replace("/32", "")
+        if (Test-IsPrivateIP $clean) {
+            $key = "🏠 LAN - " + (T "LocalNetwork")
+            if (-not $countryMap.ContainsKey($key)) {
+                $countryMap[$key] = @{ Key = $key; Count = 0; Flag = "🏠"; Name = (T "LocalNetwork") }
+            }
+            $countryMap[$key].Count++
+            continue
+        }
+
+        if ($script:GeoIPCache.ContainsKey($clean)) {
+            $geo = $script:GeoIPCache[$clean]
+            $namePart = if ($geo.Name -and $geo.Code -ne $geo.Name) { " - " + $geo.Name } else { "" }
+            $key = "$($geo.Emoji) $($geo.Code)$namePart"
+            if (-not $countryMap.ContainsKey($key)) {
+                $countryMap[$key] = @{ Key = $key; Count = 0; Flag = $geo.Emoji; Name = "$($geo.Code)$namePart" }
+            }
+            $countryMap[$key].Count++
+        } else {
+            $key = "🌐 ?? - " + (T "UnknownCountry")
+            if (-not $countryMap.ContainsKey($key)) {
+                $countryMap[$key] = @{ Key = $key; Count = 0; Flag = "🌐"; Name = (T "UnknownCountry") }
+            }
+            $countryMap[$key].Count++
+        }
+    }
+
+    $sortedCountries = @($countryMap.Values | Sort-Object -Property Count -Descending)
+    $dgvCountryStats.Rows.Clear()
+    $rank = 1
+    $topCountryText = "—"
+    $topCountryShare = 0.0
+
+    foreach ($entry in $sortedCountries) {
+        $share = if ($totalBanned -gt 0) { [Math]::Round(($entry.Count / [double]$totalBanned) * 100.0, 1) } else { 0.0 }
+        $bar = Get-VisualBar $share 12
+        if ($rank -eq 1 -and $totalBanned -gt 0) {
+            $topCountryText = "$($entry.Flag) $($entry.Name)"
+            $topCountryShare = $share
+        }
+        $rIdx = $dgvCountryStats.Rows.Add(
+            $rank,
+            $entry.Key,
+            $entry.Count,
+            "$share%",
+            $bar
+        )
+        $rank++
+    }
+
+    # 2. Розподіл за 24 годинами (00:00 - 23:00)
+    $hourCounts = @{}
+    for ($h = 0; $h -lt 24; $h++) { $hourCounts[$h] = 0 }
+
+    # Додаємо час блокувань
+    $timesMap = Get-IPBanTimesMap
+    foreach ($entry in $timesMap.Values) {
+        if ($entry -and $entry.BanDate) {
+            $h = $entry.BanDate.Hour
+            if ($h -ge 0 -and $h -lt 24) { $hourCounts[$h]++ }
+        }
+    }
+
+    # Враховуємо останні події 4625 невдалих входів Windows
+    try {
+        $recentFailed = Get-WindowsFailedLogins -maxEvents 100
+        foreach ($ev in $recentFailed) {
+            if ($ev.TimeCreated) {
+                try {
+                    $dt = [DateTime]::Parse($ev.TimeCreated)
+                    $h = $dt.Hour
+                    if ($h -ge 0 -and $h -lt 24) { $hourCounts[$h]++ }
+                } catch {}
+            }
+        }
+    } catch {}
+
+    $maxHourCount = 0
+    $peakHour = 0
+    for ($h = 0; $h -lt 24; $h++) {
+        if ($hourCounts[$h] -gt $maxHourCount) {
+            $maxHourCount = $hourCounts[$h]
+            $peakHour = $h
+        }
+    }
+
+    $dgvTimeStats.Rows.Clear()
+    for ($h = 0; $h -lt 24; $h++) {
+        $cnt = $hourCounts[$h]
+        $pct = if ($maxHourCount -gt 0) { ($cnt / [double]$maxHourCount) * 100.0 } else { 0.0 }
+        $bar = Get-VisualBar $pct 16
+        $label = "{0:D2}:00 - {1:D2}:00" -f $h, (($h + 1) % 24)
+        $rIdx = $dgvTimeStats.Rows.Add($label, $cnt, $bar)
+        if ($cnt -eq $maxHourCount -and $maxHourCount -gt 0) {
+            $row = $dgvTimeStats.Rows[$rIdx]
+            $row.DefaultCellStyle.BackColor = [System.Drawing.Color]::FromArgb(254, 242, 242)
+            $row.DefaultCellStyle.ForeColor = [System.Drawing.Color]::FromArgb(185, 28, 28)
+            $row.DefaultCellStyle.Font = New-Object System.Drawing.Font("Segoe UI", 9, [System.Drawing.FontStyle]::Bold)
+        }
+    }
+
+    # Оновлення KPI карток
+    $lblCardTotalBannedVal.Text = $totalBanned.ToString()
+    $lblCardUniqueCountriesVal.Text = $sortedCountries.Count.ToString()
+    $lblCardTopCountryVal.Text = if ($totalBanned -gt 0) { "$topCountryText ($topCountryShare%)" } else { "—" }
+    $lblCardPeakHourVal.Text = if ($maxHourCount -gt 0) { "{0:D2}:00 - {1:D2}:00" -f $peakHour, (($peakHour + 1) % 24) } else { "—" }
+
+    # Повідомлення про пік
+    if ($maxHourCount -gt 0) {
+        $nextH = ($peakHour + 1) % 24
+        $lblPeakBanner.Text = [string]::Format((T "PeakNotice"), ("{0:D2}" -f $peakHour), ("{0:D2}" -f $nextH), $maxHourCount)
+        $lblPeakBanner.Visible = $true
+    } else {
+        $lblPeakBanner.Visible = $false
     }
 }
 
@@ -2717,15 +3351,15 @@ $btnExportBanned.Add_Click({
             $isCsv = $sfd.FileName.EndsWith(".csv", [System.StringComparison]::OrdinalIgnoreCase)
             $exportList = @()
             if ($isCsv) {
-                $exportList += "Index,IPAddress,BanDate,UnbanDate,Type"
+                $exportList += "Index,IPAddress,Country,BanDate,UnbanDate,Type"
                 for ($r = 0; $r -lt $dgvBanned.Rows.Count; $r++) {
                     $row = $dgvBanned.Rows[$r]
-                    $exportList += "$($row.Cells['Index'].Value),`"$($row.Cells['IPAddress'].Value)`",`"$($row.Cells['BanDate'].Value)`",`"$($row.Cells['UnbanDate'].Value)`",`"$($row.Tag)`""
+                    $exportList += "$($row.Cells['Index'].Value),`"$($row.Cells['IPAddress'].Value)`",`"$($row.Cells['Country'].Value)`",`"$($row.Cells['BanDate'].Value)`",`"$($row.Cells['UnbanDate'].Value)`",`"$($row.Tag)`""
                 }
             } else {
                 for ($r = 0; $r -lt $dgvBanned.Rows.Count; $r++) {
                     $row = $dgvBanned.Rows[$r]
-                    $exportList += "$($row.Cells['IPAddress'].Value)`t$($row.Cells['BanDate'].Value)`t$($row.Cells['UnbanDate'].Value)"
+                    $exportList += "$($row.Cells['IPAddress'].Value)`t$($row.Cells['Country'].Value)`t$($row.Cells['BanDate'].Value)`t$($row.Cells['UnbanDate'].Value)"
                 }
             }
             $exportList | Set-Content -Path $sfd.FileName -Encoding UTF8
@@ -3158,8 +3792,16 @@ $llWiki.Add_LinkClicked({
     [System.Diagnostics.Process]::Start("https://github.com/DigitalRuby/IPBan/wiki/Configuration")
 })
 
+# Перемикання вкладок
+$tabControl.Add_SelectedIndexChanged({
+    if ($tabControl.SelectedTab -eq $tabStats) {
+        Update-StatsUI
+    }
+})
+
 # Завантаження при відкритті форми
 $form.Add_Shown({
+    Load-GeoIPCache
     Update-UILanguage
     Update-HeaderLayout
     Init-Tray
@@ -3167,6 +3809,14 @@ $form.Add_Shown({
     Refresh-BannedIPs
     Load-ConfigData
     Refresh-LogsView
+
+    # Запуск таймера для асинхронного виявлення країн GeoIP
+    if (-not $script:GeoIPTimer) {
+        $script:GeoIPTimer = New-Object System.Windows.Forms.Timer
+        $script:GeoIPTimer.Interval = 350
+        $script:GeoIPTimer.Add_Tick({ Resolve-NextPendingGeoIP })
+        $script:GeoIPTimer.Start()
+    }
 
     # Якщо служба IPBan не встановлена - відкриваємо майстер налаштувань
     $svcStatus = Get-IPBanServiceStatus
@@ -3197,6 +3847,11 @@ $form.Add_FormClosing({
             $script:TrayIcon.ShowBalloonTip(2000, "IPBan Control Center", "Програму згорнуто у системний трей. Клікніть двічі для відновлення.", [System.Windows.Forms.ToolTipIcon]::Info)
         }
     } else {
+        if ($script:GeoIPTimer) {
+            $script:GeoIPTimer.Stop()
+            $script:GeoIPTimer.Dispose()
+        }
+        Save-GeoIPCache
         if ($script:AutoRefreshTimer) {
             $script:AutoRefreshTimer.Stop()
             $script:AutoRefreshTimer.Dispose()

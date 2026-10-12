@@ -30,20 +30,30 @@ Designed for system administrators, DevOps, and power users running Windows 10, 
   - Native Windows balloon notifications on new attacker IP ban events.
   - Right-click tray menu for quick actions and IP ban counters.
   - Minimizes to tray on close [X] without interrupting protection.
+- **🌍 GeoIP Country Detection & Emoji Flags**:
+  - Asynchronously resolves attacker origin country with local disk caching (`geoip_cache.json`).
+  - Displays country code, flag emoji (e.g., 🇺🇸 US, 🇩🇪 DE, 🇺🇦 UA), and full country name in the banned IP table.
+  - Automatic detection of local/private LAN addresses without external lookups.
+- **📊 Real-Time Attack Analytics & Statistics**:
+  - Dedicated **Statistics** tab with 4 live KPI summary cards: Total Blocked IPs, Unique Countries, Top Attacking Country (% share), Peak Attack Hours.
+  - **Top Attacking Countries Ranking**: Country leaderboard with flags, ban counts, percentage shares, and visual unicode activity bars (`████░░░░`).
+  - **24-Hour Attack Distribution**: Hourly histogram (00:00 to 23:00) tracking ban timestamps and Windows Security Audit failed logon events (Event ID 4625), highlighting peak attack windows with a warning banner.
+  - One-click analytics refresh.
 - **🚫 Banned IPs Management (Windows Firewall)**:
-  - Live inspection of active firewall rules (`IPBan_*`).
+  - Live inspection of active firewall rules (`IPBan_*`) with ban date/time and unban date/time.
+  - Distinct pastel color-coding: pale red for banned attackers, pale green for whitelisted entries.
+  - Clickable IP addresses for one-click Whois lookup via ipinfo.io.
   - Search / filter IPs on the fly.
   - Unban selected IPs immediately via `unban.txt` and firewall synchronization.
   - Manually ban suspicious IPs or subnets.
-  - Export banned list to `.txt` or `.csv`.
-  - Context menu with one-click IP lookup (Whois / geolocation via ipinfo.io) and Whitelist addition.
+  - Export banned list to `.txt` or `.csv` (including country, timestamps, and rule type).
 - **⚙️ Configuration Editor (`ipban.config`)**:
   - Visual controls for failed attempt thresholds, ban durations (presets or custom), cycle intervals, and behavior switches.
   - Automatic backup creation (`ipban.config.bak`) prior to saving with one-click restore.
 - **📋 Whitelist & Blacklist Manager**:
   - Manage trusted subnets and malicious botnet IPs.
   - **Self-lockout protection**: one-click buttons to detect and whitelist local network adapters (`+ Add Local IP`) and public IP (`+ Add Public WAN IP`).
-- **📊 Security Audit & Attack Event Log (Event ID 4625)**:
+- **📑 Security Audit & Attack Event Log (Event ID 4625)**:
   - Live parsing of failed Windows logon events (RDP, Network, SMB, Interactive).
   - Details: Timestamp, Username, Source IP, Logon Type, Workstation.
   - Quick action to ban attacking IP directly from the event row.
