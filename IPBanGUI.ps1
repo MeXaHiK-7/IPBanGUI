@@ -12,6 +12,7 @@ Add-Type -AssemblyName System.IO.Compression.FileSystem
 # ------------------------------------------------------------------------------
 # Глобальні змінні та стан
 # ------------------------------------------------------------------------------
+$script:AppVersion = "v2.1.0"
 $script:DefaultInstallPath = "C:\Program Files\IPBan"
 $script:CurrentInstallPath = $script:DefaultInstallPath
 $script:ServiceName = "IPBan"
@@ -813,6 +814,7 @@ function Get-IPBanTimesMap {
 $script:GeoIPCache = @{}
 $script:GeoIPPending = New-Object System.Collections.Generic.HashSet[string]
 $script:GeoIPTimer = $null
+$script:GeoIPIsBusy = $false
 
 function Get-GeoIPCachePath {
     $dir = Get-IPBanPath
@@ -832,10 +834,15 @@ function Load-GeoIPCache {
                 $obj = ConvertFrom-Json $json -ErrorAction SilentlyContinue
                 if ($obj) {
                     foreach ($prop in $obj.psobject.Properties) {
-                        $script:GeoIPCache[$prop.Name] = @{
-                            Code  = $prop.Value.Code
-                            Name  = $prop.Value.Name
-                            Emoji = $prop.Value.Emoji
+                        $c = $prop.Value.Code
+                        $n = $prop.Value.Name
+                        # Очищаємо застарілі або збійні записи "?? / Невідомо" для повторної успішної перевірки
+                        if ($c -and $c -ne "??" -and $n -ne "Невідомо" -and $n -ne "Unknown") {
+                            $script:GeoIPCache[$prop.Name] = @{
+                                Code  = $c
+                                Name  = $n
+                                Emoji = $prop.Value.Emoji
+                            }
                         }
                     }
                 }
@@ -879,7 +886,10 @@ function Get-IPCountryInfo([string]$ip) {
         }
     }
     if ($script:GeoIPCache.ContainsKey($clean)) {
-        return $script:GeoIPCache[$clean]
+        $cached = $script:GeoIPCache[$clean]
+        if ($cached -and $cached.Code -and $cached.Code -ne "??" -and $cached.Name -ne "Невідомо" -and $cached.Name -ne "Unknown") {
+            return $cached
+        }
     }
     return $null
 }
@@ -893,83 +903,131 @@ function Get-VisualBar([double]$percent, [int]$maxBlocks = 12) {
 
 function Resolve-NextPendingGeoIP {
     if ($script:GeoIPPending.Count -eq 0) { return }
-    $batch = @()
-    foreach ($item in $script:GeoIPPending) {
-        $batch += $item
-        if ($batch.Count -ge 5) { break }
-    }
+    if ($script:GeoIPIsBusy) { return }
+    $script:GeoIPIsBusy = $true
 
-    $resolvedAny = $false
-    foreach ($ip in $batch) {
-        $script:GeoIPPending.Remove($ip) | Out-Null
-        if (Test-IsPrivateIP $ip) {
-            $script:GeoIPCache[$ip] = @{
-                Code  = "LAN"
-                Name  = (T "LocalNetwork")
-                Emoji = "🏠"
-            }
-            $resolvedAny = $true
-            continue
+    try {
+        # Беремо пачку до 100 адрес для пакетного запиту
+        $batch = @()
+        foreach ($item in $script:GeoIPPending) {
+            $batch += $item
+            if ($batch.Count -ge 100) { break }
         }
-        try {
-            $url = "http://ip-api.com/json/$ip`?fields=status,country,countryCode"
-            $res = Invoke-RestMethod -Uri $url -TimeoutSec 2 -ErrorAction Stop
-            if ($res -and $res.status -eq "success") {
-                $code = $res.countryCode
-                $name = $res.country
-                $emoji = Get-CountryFlagEmoji $code
+
+        $resolvedAny = $false
+        $remoteIPs = @()
+
+        foreach ($ip in $batch) {
+            $script:GeoIPPending.Remove($ip) | Out-Null
+            if (Test-IsPrivateIP $ip) {
                 $script:GeoIPCache[$ip] = @{
-                    Code  = $code
-                    Name  = $name
-                    Emoji = $emoji
+                    Code  = "LAN"
+                    Name  = (T "LocalNetwork")
+                    Emoji = "🏠"
                 }
                 $resolvedAny = $true
             } else {
-                # Запасний варіант через api.country.is
-                $res2 = Invoke-RestMethod -Uri "https://api.country.is/$ip" -TimeoutSec 2 -ErrorAction Stop
-                if ($res2 -and $res2.country) {
-                    $code = $res2.country
-                    $emoji = Get-CountryFlagEmoji $code
-                    $script:GeoIPCache[$ip] = @{
-                        Code  = $code
-                        Name  = $code
-                        Emoji = $emoji
-                    }
-                    $resolvedAny = $true
-                }
-            }
-        } catch {
-            # Якщо мережа тимчасово недоступна, позначимо Unknown
-            $script:GeoIPCache[$ip] = @{
-                Code  = "??"
-                Name  = (T "UnknownCountry")
-                Emoji = "🌐"
+                $remoteIPs += $ip
             }
         }
-    }
 
-    if ($resolvedAny) {
-        # Оновлення видимих комірок таблиці $dgvBanned
-        if ($dgvBanned -and $dgvBanned.Columns["Country"]) {
-            $cIdx = $dgvBanned.Columns["Country"].Index
-            for ($r = 0; $r -lt $dgvBanned.Rows.Count; $r++) {
-                $row = $dgvBanned.Rows[$r]
-                $cellIp = $row.Cells["IPAddress"].Value
-                if ($cellIp) {
-                    $clean = $cellIp.ToString().Trim().Replace("/255.255.255.255", "").Replace("/32", "")
-                    if ($script:GeoIPCache.ContainsKey($clean)) {
-                        $geo = $script:GeoIPCache[$clean]
-                        $namePart = if ($geo.Name -and $geo.Code -ne $geo.Name) { " - " + $geo.Name } else { "" }
-                        $row.Cells[$cIdx].Value = "$($geo.Emoji) $($geo.Code)$namePart"
+        if ($remoteIPs.Count -gt 0) {
+            $batchSuccess = $false
+            # 1. Пакетний запит через ip-api.com/batch (до 100 IP за 1 HTTP POST)
+            try {
+                $queries = @($remoteIPs | ForEach-Object { @{ query = $_ } })
+                $jsonBody = $queries | ConvertTo-Json -Compress
+                $url = "http://ip-api.com/batch?fields=status,country,countryCode,query"
+                $resList = Invoke-RestMethod -Uri $url -Method Post -Body $jsonBody -ContentType "application/json" -TimeoutSec 6 -ErrorAction Stop
+
+                if ($resList) {
+                    foreach ($res in $resList) {
+                        if ($res -and $res.query) {
+                            $qIp = $res.query
+                            if ($res.status -eq "success" -and $res.countryCode) {
+                                $code = $res.countryCode
+                                $name = $res.country
+                                $emoji = Get-CountryFlagEmoji $code
+                                $script:GeoIPCache[$qIp] = @{
+                                    Code  = $code
+                                    Name  = $name
+                                    Emoji = $emoji
+                                }
+                                $resolvedAny = $true
+                            } else {
+                                # Запасний варіант для IP, не знайденого в ip-api
+                                try {
+                                    $res2 = Invoke-RestMethod -Uri "https://api.country.is/$qIp" -TimeoutSec 2 -ErrorAction Stop
+                                    if ($res2 -and $res2.country) {
+                                        $code = $res2.country
+                                        $script:GeoIPCache[$qIp] = @{
+                                            Code  = $code
+                                            Name  = $code
+                                            Emoji = (Get-CountryFlagEmoji $code)
+                                        }
+                                        $resolvedAny = $true
+                                    }
+                                } catch {}
+                            }
+                        }
+                    }
+                    $batchSuccess = $true
+                }
+            } catch {
+                $batchSuccess = $false
+            }
+
+            # 2. Якщо пакетний запит не пройшов (блокування/таймаут), обробляємо запасним сервісом
+            if (-not $batchSuccess) {
+                $subBatch = @($remoteIPs | Select-Object -First 5)
+                foreach ($ip in $subBatch) {
+                    try {
+                        $res2 = Invoke-RestMethod -Uri "https://api.country.is/$ip" -TimeoutSec 2 -ErrorAction Stop
+                        if ($res2 -and $res2.country) {
+                            $code = $res2.country
+                            $script:GeoIPCache[$ip] = @{
+                                Code  = $code
+                                Name  = $code
+                                Emoji = (Get-CountryFlagEmoji $code)
+                            }
+                            $resolvedAny = $true
+                        } else {
+                            $script:GeoIPPending.Add($ip) | Out-Null
+                        }
+                    } catch {
+                        $script:GeoIPPending.Add($ip) | Out-Null
+                    }
+                }
+                if ($remoteIPs.Count -gt 5) {
+                    for ($i = 5; $i -lt $remoteIPs.Count; $i++) {
+                        $script:GeoIPPending.Add($remoteIPs[$i]) | Out-Null
                     }
                 }
             }
         }
-        Save-GeoIPCache
-        # Якщо відкрито вкладку статистики, оновити її дані
-        if ($tabControl -and $tabControl.SelectedTab -eq $tabStats) {
+
+        if ($resolvedAny) {
+            # Оновлюємо комірки таблиці $dgvBanned
+            if ($dgvBanned -and $dgvBanned.Columns["Country"]) {
+                $cIdx = $dgvBanned.Columns["Country"].Index
+                for ($r = 0; $r -lt $dgvBanned.Rows.Count; $r++) {
+                    $row = $dgvBanned.Rows[$r]
+                    $cellIp = $row.Cells["IPAddress"].Value
+                    if ($cellIp) {
+                        $clean = $cellIp.ToString().Trim().Replace("/255.255.255.255", "").Replace("/32", "")
+                        if ($script:GeoIPCache.ContainsKey($clean)) {
+                            $geo = $script:GeoIPCache[$clean]
+                            $namePart = if ($geo.Name -and $geo.Code -ne $geo.Name) { " - " + $geo.Name } else { "" }
+                            $row.Cells[$cIdx].Value = "$($geo.Emoji) $($geo.Code)$namePart"
+                        }
+                    }
+                }
+            }
+            Save-GeoIPCache
             Update-StatsUI
         }
+    } finally {
+        $script:GeoIPIsBusy = $false
     }
 }
 
@@ -1129,7 +1187,7 @@ $headerPanel.Padding = New-Object System.Windows.Forms.Padding(15, 10, 15, 10)
 $mainLayout.Controls.Add($headerPanel, 0, 0)
 
 $lblTitle = New-Object System.Windows.Forms.Label
-$lblTitle.Text = "IPBan Control Center"
+$lblTitle.Text = "IPBan Control Center $script:AppVersion"
 $lblTitle.Font = New-Object System.Drawing.Font("Segoe UI", 14, [System.Drawing.FontStyle]::Bold)
 $lblTitle.ForeColor = [System.Drawing.Color]::White
 $lblTitle.Location = New-Object System.Drawing.Point(15, 12)
@@ -2270,8 +2328,8 @@ if ($script:IsAdmin) {
 # ------------------------------------------------------------------------------
 
 function Update-UILanguage {
-    $form.Text = T "AppTitle"
-    $lblTitle.Text = T "HeaderTitle"
+    $form.Text = "$((T 'AppTitle')) $script:AppVersion"
+    $lblTitle.Text = "$((T 'HeaderTitle')) $script:AppVersion"
     $lblSubtitle.Text = T "HeaderSubtitle"
     $btnStartService.Text = T "BtnStart"
     $btnStopService.Text = T "BtnStop"
@@ -2680,6 +2738,9 @@ function Refresh-BannedIPs {
         $script:LastBannedIPs = Get-FirewallBannedIPs
         Filter-BannedGrid
         Update-StatsUI
+        if ($script:GeoIPPending.Count -gt 0) {
+            Resolve-NextPendingGeoIP
+        }
         $blockCount = @($script:LastBannedIPs | Where-Object { $_.ActionType -eq "Block" }).Count
         $allowCount = @($script:LastBannedIPs | Where-Object { $_.ActionType -eq "Allow" }).Count
         $statusLabel.Text = if ($script:CurrentLang -eq "EN") { "Rules refreshed. Blocked: $blockCount | Whitelisted: $allowCount" } else { "Правила оновлено. Заблоковано: $blockCount | У білому списку: $allowCount" }
