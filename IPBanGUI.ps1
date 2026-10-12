@@ -21,9 +21,34 @@ try {
 } catch {}
 
 # ------------------------------------------------------------------------------
+# Захист від повторного запуску (Single Instance):
+# Якщо програма вже відкрита — активуємо вікно та тихо виходимо
+# ------------------------------------------------------------------------------
+$script:AppMutex = $null
+$mutexCreated = $false
+try {
+    $script:AppMutex = New-Object System.Threading.Mutex($true, "Local\IPBanGUI_ControlCenter_Instance", [ref]$mutexCreated)
+    if (-not $mutexCreated) {
+        try {
+            $user32 = Add-Type -MemberDefinition @'
+[DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr hWnd);
+[DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+'@ -Name "User32SingleInstance" -Namespace "Win32" -PassThru -ErrorAction SilentlyContinue
+            if ($user32) {
+                Get-Process | Where-Object { $_.MainWindowTitle -like "IPBan*Control Center*" -and $_.Id -ne $PID } | ForEach-Object {
+                    [Win32.User32SingleInstance]::ShowWindow($_.MainWindowHandle, 9)
+                    [Win32.User32SingleInstance]::SetForegroundWindow($_.MainWindowHandle)
+                }
+            }
+        } catch {}
+        exit 0
+    }
+} catch {}
+
+# ------------------------------------------------------------------------------
 # Глобальні змінні та стан
 # ------------------------------------------------------------------------------
-$script:AppVersion = "v2.1.0"
+$script:AppVersion = "v2.1.1"
 $script:DefaultInstallPath = "C:\Program Files\IPBan"
 $script:CurrentInstallPath = $script:DefaultInstallPath
 $script:ServiceName = "IPBan"
@@ -470,6 +495,14 @@ function Get-AppTrayIcon([string]$state) {
     [NativeMethods]::DestroyIcon($hIcon) | Out-Null
     $bmp.Dispose()
     return $clone
+}
+
+function Enable-DoubleBuffering($control) {
+    if (-not $control) { return }
+    try {
+        $prop = [System.Windows.Forms.Control].GetProperty("DoubleBuffered", [System.Reflection.BindingFlags]::NonPublic -bor [System.Reflection.BindingFlags]::Instance)
+        if ($prop) { $prop.SetValue($control, $true, $null) }
+    } catch {}
 }
 
 # Допоміжна функція створення згладжених кнопок та бейджів (Rounded Buttons)
@@ -1211,11 +1244,30 @@ function Get-WindowsFailedLogins {
 
 $form = New-Object System.Windows.Forms.Form
 $form.Text = "IPBan Manager & Control Center"
-$form.Size = New-Object System.Drawing.Size(1080, 780)
-$form.MinimumSize = New-Object System.Drawing.Size(950, 680)
+$screen = [System.Windows.Forms.Screen]::PrimaryScreen
+$workArea = if ($screen) { $screen.WorkingArea } else { New-Object System.Drawing.Rectangle(0, 0, 1024, 768) }
+$initWidth = [Math]::Min(1050, [Math]::Max(760, $workArea.Width - 30))
+$initHeight = [Math]::Min(690, [Math]::Max(480, $workArea.Height - 40))
+$form.Size = New-Object System.Drawing.Size($initWidth, $initHeight)
+$form.MinimumSize = New-Object System.Drawing.Size(740, 480)
 $form.StartPosition = "CenterScreen"
 $form.Font = New-Object System.Drawing.Font("Segoe UI", 9.25)
 $form.BackColor = [System.Drawing.Color]::FromArgb(248, 250, 252)
+
+# Підлаштування форми під робочу область екрана (запобігає зрізанню нижньої границі)
+$form.Add_Load({
+    try {
+        $wa = [System.Windows.Forms.Screen]::FromControl($form).WorkingArea
+        if ($form.Height -gt $wa.Height) {
+            $form.Height = [Math]::Max(480, $wa.Height - 30)
+        }
+        if ($form.Width -gt $wa.Width) {
+            $form.Width = [Math]::Max(740, $wa.Width - 30)
+        }
+        $form.Top = [Math]::Max($wa.Top, [int]($wa.Top + ($wa.Height - $form.Height) / 2))
+        $form.Left = [Math]::Max($wa.Left, [int]($wa.Left + ($wa.Width - $form.Width) / 2))
+    } catch {}
+})
 
 # Головна вертикальна розмітка
 $mainLayout = New-Object System.Windows.Forms.TableLayoutPanel
@@ -1571,6 +1623,7 @@ $miCopyIP = $ctxBanned.Items.Add("Копіювати IP")
 $miUnban = $ctxBanned.Items.Add("Розблокувати")
 $miWhitelist = $ctxBanned.Items.Add("Додати до Білого списку (Whitelist)")
 $dgvBanned.ContextMenuStrip = $ctxBanned
+Enable-DoubleBuffering $dgvBanned
 
 # ==============================================================================
 # ВКЛАДКА 2: Статистика атак (GeoIP та розподіл за часом)
@@ -1578,15 +1631,16 @@ $dgvBanned.ContextMenuStrip = $ctxBanned
 $tabStats = New-Object System.Windows.Forms.TabPage
 $tabStats.Text = (T "TabStats")
 $tabStats.BackColor = [System.Drawing.Color]::White
+$tabStats.AutoScroll = $true
 $tabControl.TabPages.Add($tabStats)
 
 $layoutStats = New-Object System.Windows.Forms.TableLayoutPanel
 $layoutStats.Dock = [System.Windows.Forms.DockStyle]::Fill
 $layoutStats.RowCount = 3
 $layoutStats.ColumnCount = 1
-$layoutStats.RowStyles.Add((New-Object System.Windows.Forms.RowStyle([System.Windows.Forms.SizeType]::Absolute, 85)))
+$layoutStats.RowStyles.Add((New-Object System.Windows.Forms.RowStyle([System.Windows.Forms.SizeType]::Absolute, 74)))
 $layoutStats.RowStyles.Add((New-Object System.Windows.Forms.RowStyle([System.Windows.Forms.SizeType]::Percent, 100)))
-$layoutStats.RowStyles.Add((New-Object System.Windows.Forms.RowStyle([System.Windows.Forms.SizeType]::Absolute, 45)))
+$layoutStats.RowStyles.Add((New-Object System.Windows.Forms.RowStyle([System.Windows.Forms.SizeType]::Absolute, 40)))
 $tabStats.Controls.Add($layoutStats)
 
 # --- Рядок 0: KPI картки (4 шт) ---
@@ -1598,7 +1652,7 @@ $panelKpis.ColumnStyles.Add((New-Object System.Windows.Forms.ColumnStyle([System
 $panelKpis.ColumnStyles.Add((New-Object System.Windows.Forms.ColumnStyle([System.Windows.Forms.SizeType]::Percent, 25)))
 $panelKpis.ColumnStyles.Add((New-Object System.Windows.Forms.ColumnStyle([System.Windows.Forms.SizeType]::Percent, 25)))
 $panelKpis.ColumnStyles.Add((New-Object System.Windows.Forms.ColumnStyle([System.Windows.Forms.SizeType]::Percent, 25)))
-$panelKpis.Padding = New-Object System.Windows.Forms.Padding(10, 8, 10, 6)
+$panelKpis.Padding = New-Object System.Windows.Forms.Padding(8, 4, 8, 4)
 $layoutStats.Controls.Add($panelKpis, 0, 0)
 
 # Card 1: Всього заблоковано
@@ -1606,22 +1660,23 @@ $cardTotalBanned = New-Object System.Windows.Forms.Panel
 $cardTotalBanned.Dock = [System.Windows.Forms.DockStyle]::Fill
 $cardTotalBanned.BackColor = [System.Drawing.Color]::FromArgb(239, 246, 255)
 $cardTotalBanned.BorderStyle = [System.Windows.Forms.BorderStyle]::FixedSingle
-$cardTotalBanned.Margin = New-Object System.Windows.Forms.Padding(4)
-$cardTotalBanned.Padding = New-Object System.Windows.Forms.Padding(8, 4, 8, 4)
+$cardTotalBanned.Margin = New-Object System.Windows.Forms.Padding(3)
+$cardTotalBanned.Padding = New-Object System.Windows.Forms.Padding(6, 4, 6, 2)
 
 $lblCardTotalBannedTitle = New-Object System.Windows.Forms.Label
 $lblCardTotalBannedTitle.Text = (T "CardTotalBanned")
-$lblCardTotalBannedTitle.Font = New-Object System.Drawing.Font("Segoe UI", 8.5)
+$lblCardTotalBannedTitle.Font = New-Object System.Drawing.Font("Segoe UI", 8.25)
 $lblCardTotalBannedTitle.ForeColor = [System.Drawing.Color]::FromArgb(71, 85, 105)
 $lblCardTotalBannedTitle.Dock = [System.Windows.Forms.DockStyle]::Top
 $lblCardTotalBannedTitle.Height = 18
 
 $lblCardTotalBannedVal = New-Object System.Windows.Forms.Label
 $lblCardTotalBannedVal.Text = "0"
-$lblCardTotalBannedVal.Font = New-Object System.Drawing.Font("Segoe UI", 16, [System.Drawing.FontStyle]::Bold)
+$lblCardTotalBannedVal.Font = New-Object System.Drawing.Font("Segoe UI", 15, [System.Drawing.FontStyle]::Bold)
 $lblCardTotalBannedVal.ForeColor = [System.Drawing.Color]::FromArgb(30, 64, 175)
 $lblCardTotalBannedVal.Dock = [System.Windows.Forms.DockStyle]::Fill
 $lblCardTotalBannedVal.TextAlign = [System.Drawing.ContentAlignment]::MiddleLeft
+$lblCardTotalBannedVal.AutoEllipsis = $true
 
 $cardTotalBanned.Controls.Add($lblCardTotalBannedVal)
 $cardTotalBanned.Controls.Add($lblCardTotalBannedTitle)
@@ -1632,22 +1687,23 @@ $cardUniqueCountries = New-Object System.Windows.Forms.Panel
 $cardUniqueCountries.Dock = [System.Windows.Forms.DockStyle]::Fill
 $cardUniqueCountries.BackColor = [System.Drawing.Color]::FromArgb(236, 253, 245)
 $cardUniqueCountries.BorderStyle = [System.Windows.Forms.BorderStyle]::FixedSingle
-$cardUniqueCountries.Margin = New-Object System.Windows.Forms.Padding(4)
-$cardUniqueCountries.Padding = New-Object System.Windows.Forms.Padding(8, 4, 8, 4)
+$cardUniqueCountries.Margin = New-Object System.Windows.Forms.Padding(3)
+$cardUniqueCountries.Padding = New-Object System.Windows.Forms.Padding(6, 4, 6, 2)
 
 $lblCardUniqueCountriesTitle = New-Object System.Windows.Forms.Label
 $lblCardUniqueCountriesTitle.Text = (T "CardUniqueCountries")
-$lblCardUniqueCountriesTitle.Font = New-Object System.Drawing.Font("Segoe UI", 8.5)
+$lblCardUniqueCountriesTitle.Font = New-Object System.Drawing.Font("Segoe UI", 8.25)
 $lblCardUniqueCountriesTitle.ForeColor = [System.Drawing.Color]::FromArgb(71, 85, 105)
 $lblCardUniqueCountriesTitle.Dock = [System.Windows.Forms.DockStyle]::Top
 $lblCardUniqueCountriesTitle.Height = 18
 
 $lblCardUniqueCountriesVal = New-Object System.Windows.Forms.Label
 $lblCardUniqueCountriesVal.Text = "0"
-$lblCardUniqueCountriesVal.Font = New-Object System.Drawing.Font("Segoe UI", 16, [System.Drawing.FontStyle]::Bold)
+$lblCardUniqueCountriesVal.Font = New-Object System.Drawing.Font("Segoe UI", 15, [System.Drawing.FontStyle]::Bold)
 $lblCardUniqueCountriesVal.ForeColor = [System.Drawing.Color]::FromArgb(6, 95, 70)
 $lblCardUniqueCountriesVal.Dock = [System.Windows.Forms.DockStyle]::Fill
 $lblCardUniqueCountriesVal.TextAlign = [System.Drawing.ContentAlignment]::MiddleLeft
+$lblCardUniqueCountriesVal.AutoEllipsis = $true
 
 $cardUniqueCountries.Controls.Add($lblCardUniqueCountriesVal)
 $cardUniqueCountries.Controls.Add($lblCardUniqueCountriesTitle)
@@ -1658,22 +1714,23 @@ $cardTopCountry = New-Object System.Windows.Forms.Panel
 $cardTopCountry.Dock = [System.Windows.Forms.DockStyle]::Fill
 $cardTopCountry.BackColor = [System.Drawing.Color]::FromArgb(255, 241, 242)
 $cardTopCountry.BorderStyle = [System.Windows.Forms.BorderStyle]::FixedSingle
-$cardTopCountry.Margin = New-Object System.Windows.Forms.Padding(4)
-$cardTopCountry.Padding = New-Object System.Windows.Forms.Padding(8, 4, 8, 4)
+$cardTopCountry.Margin = New-Object System.Windows.Forms.Padding(3)
+$cardTopCountry.Padding = New-Object System.Windows.Forms.Padding(6, 4, 6, 2)
 
 $lblCardTopCountryTitle = New-Object System.Windows.Forms.Label
 $lblCardTopCountryTitle.Text = (T "CardTopCountry")
-$lblCardTopCountryTitle.Font = New-Object System.Drawing.Font("Segoe UI", 8.5)
+$lblCardTopCountryTitle.Font = New-Object System.Drawing.Font("Segoe UI", 8.25)
 $lblCardTopCountryTitle.ForeColor = [System.Drawing.Color]::FromArgb(71, 85, 105)
 $lblCardTopCountryTitle.Dock = [System.Windows.Forms.DockStyle]::Top
 $lblCardTopCountryTitle.Height = 18
 
 $lblCardTopCountryVal = New-Object System.Windows.Forms.Label
 $lblCardTopCountryVal.Text = "—"
-$lblCardTopCountryVal.Font = New-Object System.Drawing.Font("Segoe UI", 13, [System.Drawing.FontStyle]::Bold)
+$lblCardTopCountryVal.Font = New-Object System.Drawing.Font("Segoe UI", 12, [System.Drawing.FontStyle]::Bold)
 $lblCardTopCountryVal.ForeColor = [System.Drawing.Color]::FromArgb(159, 18, 57)
 $lblCardTopCountryVal.Dock = [System.Windows.Forms.DockStyle]::Fill
 $lblCardTopCountryVal.TextAlign = [System.Drawing.ContentAlignment]::MiddleLeft
+$lblCardTopCountryVal.AutoEllipsis = $true
 
 $cardTopCountry.Controls.Add($lblCardTopCountryVal)
 $cardTopCountry.Controls.Add($lblCardTopCountryTitle)
@@ -1684,22 +1741,23 @@ $cardPeakHour = New-Object System.Windows.Forms.Panel
 $cardPeakHour.Dock = [System.Windows.Forms.DockStyle]::Fill
 $cardPeakHour.BackColor = [System.Drawing.Color]::FromArgb(255, 251, 235)
 $cardPeakHour.BorderStyle = [System.Windows.Forms.BorderStyle]::FixedSingle
-$cardPeakHour.Margin = New-Object System.Windows.Forms.Padding(4)
-$cardPeakHour.Padding = New-Object System.Windows.Forms.Padding(8, 4, 8, 4)
+$cardPeakHour.Margin = New-Object System.Windows.Forms.Padding(3)
+$cardPeakHour.Padding = New-Object System.Windows.Forms.Padding(6, 4, 6, 2)
 
 $lblCardPeakHourTitle = New-Object System.Windows.Forms.Label
 $lblCardPeakHourTitle.Text = (T "CardPeakHour")
-$lblCardPeakHourTitle.Font = New-Object System.Drawing.Font("Segoe UI", 8.5)
+$lblCardPeakHourTitle.Font = New-Object System.Drawing.Font("Segoe UI", 8.25)
 $lblCardPeakHourTitle.ForeColor = [System.Drawing.Color]::FromArgb(71, 85, 105)
 $lblCardPeakHourTitle.Dock = [System.Windows.Forms.DockStyle]::Top
 $lblCardPeakHourTitle.Height = 18
 
 $lblCardPeakHourVal = New-Object System.Windows.Forms.Label
 $lblCardPeakHourVal.Text = "—"
-$lblCardPeakHourVal.Font = New-Object System.Drawing.Font("Segoe UI", 15, [System.Drawing.FontStyle]::Bold)
+$lblCardPeakHourVal.Font = New-Object System.Drawing.Font("Segoe UI", 13, [System.Drawing.FontStyle]::Bold)
 $lblCardPeakHourVal.ForeColor = [System.Drawing.Color]::FromArgb(146, 64, 14)
 $lblCardPeakHourVal.Dock = [System.Windows.Forms.DockStyle]::Fill
 $lblCardPeakHourVal.TextAlign = [System.Drawing.ContentAlignment]::MiddleLeft
+$lblCardPeakHourVal.AutoEllipsis = $true
 
 $cardPeakHour.Controls.Add($lblCardPeakHourVal)
 $cardPeakHour.Controls.Add($lblCardPeakHourTitle)
@@ -1712,7 +1770,7 @@ $panelStatsBody.RowCount = 1
 $panelStatsBody.ColumnCount = 2
 $panelStatsBody.ColumnStyles.Add((New-Object System.Windows.Forms.ColumnStyle([System.Windows.Forms.SizeType]::Percent, 50)))
 $panelStatsBody.ColumnStyles.Add((New-Object System.Windows.Forms.ColumnStyle([System.Windows.Forms.SizeType]::Percent, 50)))
-$panelStatsBody.Padding = New-Object System.Windows.Forms.Padding(10, 0, 10, 6)
+$panelStatsBody.Padding = New-Object System.Windows.Forms.Padding(8, 0, 8, 4)
 $layoutStats.Controls.Add($panelStatsBody, 0, 1)
 
 # Ліва група: Топ-країни атак
@@ -1721,7 +1779,7 @@ $gbCountryStats.Text = (T "GbCountryStats")
 $gbCountryStats.Dock = [System.Windows.Forms.DockStyle]::Fill
 $gbCountryStats.Font = New-Object System.Drawing.Font("Segoe UI", 9.5, [System.Drawing.FontStyle]::Bold)
 $gbCountryStats.ForeColor = [System.Drawing.Color]::FromArgb(30, 41, 59)
-$gbCountryStats.Padding = New-Object System.Windows.Forms.Padding(8)
+$gbCountryStats.Padding = New-Object System.Windows.Forms.Padding(6)
 $panelStatsBody.Controls.Add($gbCountryStats, 0, 0)
 
 $dgvCountryStats = New-Object System.Windows.Forms.DataGridView
@@ -1736,6 +1794,7 @@ $dgvCountryStats.BackgroundColor = [System.Drawing.Color]::White
 $dgvCountryStats.BorderStyle = [System.Windows.Forms.BorderStyle]::None
 $dgvCountryStats.RowHeadersVisible = $false
 $dgvCountryStats.Font = New-Object System.Drawing.Font("Segoe UI", 9, [System.Drawing.FontStyle]::Regular)
+Enable-DoubleBuffering $dgvCountryStats
 
 [void]$dgvCountryStats.Columns.Add("Rank", (T "ColStatsRank"))
 [void]$dgvCountryStats.Columns.Add("Country", (T "ColStatsCountry"))
@@ -1759,27 +1818,18 @@ $gbTimeStats.Text = (T "GbTimeStats")
 $gbTimeStats.Dock = [System.Windows.Forms.DockStyle]::Fill
 $gbTimeStats.Font = New-Object System.Drawing.Font("Segoe UI", 9.5, [System.Drawing.FontStyle]::Bold)
 $gbTimeStats.ForeColor = [System.Drawing.Color]::FromArgb(30, 41, 59)
-$gbTimeStats.Padding = New-Object System.Windows.Forms.Padding(8)
+$gbTimeStats.Padding = New-Object System.Windows.Forms.Padding(6)
 $panelStatsBody.Controls.Add($gbTimeStats, 1, 0)
 
-$panelTimeContainer = New-Object System.Windows.Forms.TableLayoutPanel
-$panelTimeContainer.Dock = [System.Windows.Forms.DockStyle]::Fill
-$panelTimeContainer.RowCount = 2
-$panelTimeContainer.ColumnCount = 1
-$panelTimeContainer.RowStyles.Add((New-Object System.Windows.Forms.RowStyle([System.Windows.Forms.SizeType]::AutoSize)))
-$panelTimeContainer.RowStyles.Add((New-Object System.Windows.Forms.RowStyle([System.Windows.Forms.SizeType]::Percent, 100)))
-$gbTimeStats.Controls.Add($panelTimeContainer)
-
 $lblPeakBanner = New-Object System.Windows.Forms.Label
-$lblPeakBanner.Dock = [System.Windows.Forms.DockStyle]::Fill
+$lblPeakBanner.Dock = [System.Windows.Forms.DockStyle]::Top
+$lblPeakBanner.Height = 28
 $lblPeakBanner.BackColor = [System.Drawing.Color]::FromArgb(254, 242, 242)
 $lblPeakBanner.ForeColor = [System.Drawing.Color]::FromArgb(185, 28, 28)
-$lblPeakBanner.Font = New-Object System.Drawing.Font("Segoe UI", 9, [System.Drawing.FontStyle]::Bold)
-$lblPeakBanner.Padding = New-Object System.Windows.Forms.Padding(6)
-$lblPeakBanner.Margin = New-Object System.Windows.Forms.Padding(0, 0, 0, 6)
+$lblPeakBanner.Font = New-Object System.Drawing.Font("Segoe UI", 8.5, [System.Drawing.FontStyle]::Bold)
+$lblPeakBanner.Padding = New-Object System.Windows.Forms.Padding(4)
 $lblPeakBanner.Visible = $false
 $lblPeakBanner.TextAlign = [System.Drawing.ContentAlignment]::MiddleLeft
-$panelTimeContainer.Controls.Add($lblPeakBanner, 0, 0)
 
 $dgvTimeStats = New-Object System.Windows.Forms.DataGridView
 $dgvTimeStats.Dock = [System.Windows.Forms.DockStyle]::Fill
@@ -1793,6 +1843,7 @@ $dgvTimeStats.BackgroundColor = [System.Drawing.Color]::White
 $dgvTimeStats.BorderStyle = [System.Windows.Forms.BorderStyle]::None
 $dgvTimeStats.RowHeadersVisible = $false
 $dgvTimeStats.Font = New-Object System.Drawing.Font("Segoe UI", 9, [System.Drawing.FontStyle]::Regular)
+Enable-DoubleBuffering $dgvTimeStats
 
 [void]$dgvTimeStats.Columns.Add("Hour", (T "ColHour"))
 [void]$dgvTimeStats.Columns.Add("Count", (T "ColHourAttacks"))
@@ -1803,7 +1854,9 @@ $dgvTimeStats.Columns["Count"].FillWeight = 22
 $dgvTimeStats.Columns["Bar"].FillWeight = 52
 $dgvTimeStats.Columns["Hour"].DefaultCellStyle.Alignment = [System.Windows.Forms.DataGridViewContentAlignment]::MiddleCenter
 $dgvTimeStats.Columns["Count"].DefaultCellStyle.Alignment = [System.Windows.Forms.DataGridViewContentAlignment]::MiddleCenter
-$panelTimeContainer.Controls.Add($dgvTimeStats, 0, 1)
+
+$gbTimeStats.Controls.Add($dgvTimeStats)
+$gbTimeStats.Controls.Add($lblPeakBanner)
 
 # --- Рядок 2: Нижня панель (Кнопка оновлення та статус) ---
 $panelStatsFooter = New-Object System.Windows.Forms.Panel
@@ -1828,7 +1881,7 @@ $lblStatsStatus.ForeColor = [System.Drawing.Color]::FromArgb(100, 116, 139)
 $panelStatsFooter.Controls.Add($lblStatsStatus)
 
 $btnRefreshStats.Add_Click({
-    Update-StatsUI
+    Update-StatsUI -forceRefreshHeavy $true
     $lblStatsStatus.Text = if ($script:CurrentLang -eq "EN") { "Updated at $(Get-Date -Format 'HH:mm:ss')" } else { "Оновлено о $(Get-Date -Format 'HH:mm:ss')" }
 })
 
@@ -2933,6 +2986,7 @@ function Filter-BannedGrid {
 }
 
 function Update-StatsUI {
+    param([bool]$forceRefreshHeavy = $false)
     if (-not $dgvCountryStats -or -not $dgvTimeStats) { return }
 
     $allList = @($script:LastBannedIPs | Where-Object { $_.ActionType -eq "Block" })
@@ -2993,31 +3047,40 @@ function Update-StatsUI {
     }
 
     # 2. Розподіл за 24 годинами (00:00 - 23:00)
-    $hourCounts = @{}
-    for ($h = 0; $h -lt 24; $h++) { $hourCounts[$h] = 0 }
+    # Кешуємо запити дискових логів та журналу Windows 4625 на 60 секунд, щоб не блокувати інтерфейс
+    $now = Get-Date
+    if ($forceRefreshHeavy -or -not $script:CachedHourCounts -or -not $script:LastHourCountsTime -or ($now - $script:LastHourCountsTime).TotalSeconds -gt 60) {
+        $hourCounts = @{}
+        for ($h = 0; $h -lt 24; $h++) { $hourCounts[$h] = 0 }
 
-    # Додаємо час блокувань
-    $timesMap = Get-IPBanTimesMap
-    foreach ($entry in $timesMap.Values) {
-        if ($entry -and $entry.BanDate) {
-            $h = $entry.BanDate.Hour
-            if ($h -ge 0 -and $h -lt 24) { $hourCounts[$h]++ }
-        }
-    }
-
-    # Враховуємо останні події 4625 невдалих входів Windows
-    try {
-        $recentFailed = Get-WindowsFailedLogins -maxEvents 100
-        foreach ($ev in $recentFailed) {
-            if ($ev.TimeCreated) {
-                try {
-                    $dt = [DateTime]::Parse($ev.TimeCreated)
-                    $h = $dt.Hour
-                    if ($h -ge 0 -and $h -lt 24) { $hourCounts[$h]++ }
-                } catch {}
+        # Додаємо час блокувань із кешу SQLite/логів
+        $timesMap = Get-IPBanTimesMap
+        foreach ($entry in $timesMap.Values) {
+            if ($entry -and $entry.BanDate) {
+                $h = $entry.BanDate.Hour
+                if ($h -ge 0 -and $h -lt 24) { $hourCounts[$h]++ }
             }
         }
-    } catch {}
+
+        # Враховуємо останні події 4625 невдалих входів Windows (до 50 записів)
+        try {
+            $recentFailed = Get-WindowsFailedLogins -maxEvents 50
+            foreach ($ev in $recentFailed) {
+                if ($ev.TimeCreated) {
+                    try {
+                        $dt = [DateTime]::Parse($ev.TimeCreated)
+                        $h = $dt.Hour
+                        if ($h -ge 0 -and $h -lt 24) { $hourCounts[$h]++ }
+                    } catch {}
+                }
+            }
+        } catch {}
+
+        $script:CachedHourCounts = $hourCounts
+        $script:LastHourCountsTime = $now
+    } else {
+        $hourCounts = $script:CachedHourCounts
+    }
 
     $maxHourCount = 0
     $peakHour = 0

@@ -759,6 +759,24 @@ function Start-InstallationProcess {
             New-Item -ItemType Directory -Path $targetDir -Force | Out-Null
         }
 
+        # 0. Перевірка та закриття попередніх запущених копій (запобігає дублюванню процесів та блокуванню файлів)
+        $pbInstall.Value = 10
+        Log-Step "Перевірка та закриття попередніх запущених копій..."
+        try {
+            Get-Process -Name "IPBanControlCenter" -ErrorAction SilentlyContinue | ForEach-Object {
+                try {
+                    $_.CloseMainWindow() | Out-Null
+                    Start-Sleep -Milliseconds 250
+                    if (-not $_.HasExited) { $_.Kill() }
+                } catch {}
+            }
+            Get-WmiObject Win32_Process -Filter "Name = 'powershell.exe'" -ErrorAction SilentlyContinue | ForEach-Object {
+                if ($_.CommandLine -like "*IPBanGUI.ps1*") {
+                    try { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue } catch {}
+                }
+            }
+        } catch {}
+
         # 1. Копіювання файлів програми
         $pbInstall.Value = 20
         Log-Step "Копіювання файлів IPBan Control Center..."
@@ -971,7 +989,7 @@ $doneTitle = if ($uninstLang -eq "EN") { "Uninstall Complete" } else { "Вида
         if (-not (Test-Path $regPath)) { New-Item -Path $regPath -Force | Out-Null }
         Set-ItemProperty -Path $regPath -Name "DisplayName" -Value "IPBan Manager & Control Center"
         Set-ItemProperty -Path $regPath -Name "DisplayIcon" -Value "$targetExe,0"
-        Set-ItemProperty -Path $regPath -Name "DisplayVersion" -Value "2.1.0"
+        Set-ItemProperty -Path $regPath -Name "DisplayVersion" -Value "2.1.1"
         Set-ItemProperty -Path $regPath -Name "Publisher" -Value "IPBan Community & Tooling"
         Set-ItemProperty -Path $regPath -Name "InstallLocation" -Value $targetDir
         Set-ItemProperty -Path $regPath -Name "UninstallString" -Value "powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$uninstallerPs1`""

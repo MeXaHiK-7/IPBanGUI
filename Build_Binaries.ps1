@@ -106,9 +106,14 @@ namespace IPBanControlCenter {
 
         [STAThread]
         static void Main(string[] args) {
-            try {
-                string baseDir = AppDomain.CurrentDomain.BaseDirectory;
-                string ps1 = Path.Combine(baseDir, "IPBanGUI.ps1");
+            bool createdNew = false;
+            using (var mutex = new System.Threading.Mutex(true, "Local\\IPBanControlCenter_Exe_SingleInstance", out createdNew)) {
+                if (!createdNew) {
+                    return;
+                }
+                try {
+                    string baseDir = AppDomain.CurrentDomain.BaseDirectory;
+                    string ps1 = Path.Combine(baseDir, "IPBanGUI.ps1");
 
                 // 1. Шукаємо поруч із .exe
                 if (!File.Exists(ps1)) {
@@ -195,6 +200,7 @@ namespace IPBanControlCenter {
             }
         }
     }
+}
 }
 "@
 
@@ -326,7 +332,7 @@ if ($cr2.Errors.Count -eq 0) {
     Copy-Item $launcherExe -Destination (Join-Path $relDir "IPBanControlCenter.exe") -Force
     Copy-Item $setupExe -Destination (Join-Path $relDir "Setup_IPBanGUI.exe") -Force
 
-    $zipPath = Join-Path $relDir "IPBanGUI-v2.1.0.zip"
+    $zipPath = Join-Path $relDir "IPBanGUI-v2.1.1.zip"
     if (Test-Path $zipPath) { Remove-Item $zipPath -Force }
     Add-Type -AssemblyName System.IO.Compression.FileSystem
     $tempZipDir = Join-Path $env:TEMP ("zip_" + [Guid]::NewGuid().ToString("N"))
