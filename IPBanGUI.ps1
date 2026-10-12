@@ -711,19 +711,36 @@ function Get-FirewallBannedIPs {
         $fw = New-Object -ComObject HNetCfg.FwPolicy2
         foreach ($rule in $fw.Rules) {
             if ($rule.Name -like "IPBan*") {
+                # Вимкнені правила не блокують трафік і не повинні показуватися як активні блокування
+                if (-not $rule.Enabled) { continue }
+
                 $ips = $rule.RemoteAddresses -split ","
                 foreach ($ip in $ips) {
                     $trim = $ip.Trim()
-                    if ($trim -and $trim -ne "*" -and $trim -ne "255.255.255.255") {
-                        $cleanIp = $trim.Replace("/255.255.255.255", "").Replace("/32", "")
-                        $isBlock = ($rule.Action -eq 0) -and ($rule.Name -notlike "*Whitelist*")
-                        $results += [PSCustomObject]@{
-                            IPAddress   = $cleanIp
-                            RuleName    = $rule.Name
-                            ActionType  = if ($isBlock) { "Block" } else { "Allow" }
-                            ActionLabel = if ($isBlock) { "⛔ Блокування" } else { "⚪ Дозволено (Whitelist)" }
-                            Enabled     = $rule.Enabled
-                        }
+                    if (-not $trim -or $trim -eq "*") { continue }
+
+                    # Нормалізація діапазону X.X.X.X-X.X.X.X до одного IP
+                    if ($trim -match '^([^-\s]+)-\1$') {
+                        $trim = $matches[1].Trim()
+                    }
+
+                    # Пропуск dummy/broadcast адрес Windows Firewall
+                    if ($trim -like "255.255.255.255*" -or $trim -like "*-255.255.255.255" -or $trim -eq "255.255.255.255") {
+                        continue
+                    }
+
+                    $cleanIp = $trim.Replace("/255.255.255.255", "").Replace("/32", "")
+                    if ($cleanIp -eq "255.255.255.255" -or $cleanIp -like "255.255.255.255*") {
+                        continue
+                    }
+
+                    $isBlock = ($rule.Action -eq 0) -and ($rule.Name -notlike "*Whitelist*")
+                    $results += [PSCustomObject]@{
+                        IPAddress   = $cleanIp
+                        RuleName    = $rule.Name
+                        ActionType  = if ($isBlock) { "Block" } else { "Allow" }
+                        ActionLabel = if ($isBlock) { "⛔ Блокування" } else { "⚪ Дозволено (Whitelist)" }
+                        Enabled     = $rule.Enabled
                     }
                 }
             }
@@ -732,20 +749,33 @@ function Get-FirewallBannedIPs {
         try {
             $rules = Get-NetFirewallRule -Name "IPBan*" -ErrorAction SilentlyContinue
             foreach ($r in $rules) {
+                if (-not $r.Enabled) { continue }
                 $filters = Get-NetFirewallAddressFilter -AssociatedNetFirewallRule $r -ErrorAction SilentlyContinue
                 foreach ($f in $filters) {
                     foreach ($ip in $f.RemoteAddress) {
                         $trim = $ip.Trim()
-                        if ($trim -and $trim -ne "*" -and $trim -ne "255.255.255.255") {
-                            $cleanIp = $trim.Replace("/255.255.255.255", "").Replace("/32", "")
-                            $isBlock = ($r.Action -eq "Block") -and ($r.Name -notlike "*Whitelist*")
-                            $results += [PSCustomObject]@{
-                                IPAddress   = $cleanIp
-                                RuleName    = $r.Name
-                                ActionType  = if ($isBlock) { "Block" } else { "Allow" }
-                                ActionLabel = if ($isBlock) { "⛔ Блокування" } else { "⚪ Дозволено (Whitelist)" }
-                                Enabled     = $r.Enabled
-                            }
+                        if (-not $trim -or $trim -eq "*") { continue }
+
+                        if ($trim -match '^([^-\s]+)-\1$') {
+                            $trim = $matches[1].Trim()
+                        }
+
+                        if ($trim -like "255.255.255.255*" -or $trim -like "*-255.255.255.255" -or $trim -eq "255.255.255.255") {
+                            continue
+                        }
+
+                        $cleanIp = $trim.Replace("/255.255.255.255", "").Replace("/32", "")
+                        if ($cleanIp -eq "255.255.255.255" -or $cleanIp -like "255.255.255.255*") {
+                            continue
+                        }
+
+                        $isBlock = ($r.Action -eq "Block") -and ($r.Name -notlike "*Whitelist*")
+                        $results += [PSCustomObject]@{
+                            IPAddress   = $cleanIp
+                            RuleName    = $r.Name
+                            ActionType  = if ($isBlock) { "Block" } else { "Allow" }
+                            ActionLabel = if ($isBlock) { "⛔ Блокування" } else { "⚪ Дозволено (Whitelist)" }
+                            Enabled     = $r.Enabled
                         }
                     }
                 }
@@ -883,6 +913,7 @@ function Test-IsPrivateIP([string]$ip) {
     if ($ip -like "10.*" -or $ip -like "192.168.*" -or $ip -like "127.*" -or $ip -eq "::1" -or $ip -eq "localhost") { return $true }
     if ($ip -match '^172\.(1[6-9]|2[0-9]|3[0-1])\.') { return $true }
     if ($ip -like "169.254.*") { return $true }
+    if ($ip -like "255.255.255.255*" -or $ip -like "*-255.255.255.255" -or $ip -eq "255.255.255.255") { return $true }
     return $false
 }
 
@@ -1063,9 +1094,18 @@ function Unban-IPAddress {
         $fw = New-Object -ComObject HNetCfg.FwPolicy2
         foreach ($rule in $fw.Rules) {
             if ($rule.Name -like "IPBan*" -and $rule.Name -notlike "*Whitelist*" -and $rule.Action -eq 0) {
-                $addresses = ($rule.RemoteAddresses -split ",") | ForEach-Object { $_.Trim().Replace("/255.255.255.255", "").Replace("/32", "") }
+                $addresses = ($rule.RemoteAddresses -split ",") | ForEach-Object {
+                    $a = $_.Trim().Replace("/255.255.255.255", "").Replace("/32", "")
+                    if ($a -match '^([^-\s]+)-\1$') { $a = $matches[1].Trim() }
+                    $a
+                }
                 if ($addresses -contains $cleanIp) {
-                    $remaining = $addresses | Where-Object { $_ -ne $cleanIp -and $_ -ne "255.255.255.255" }
+                    $remaining = $addresses | Where-Object {
+                        $_ -ne $cleanIp -and
+                        $_ -ne "255.255.255.255" -and
+                        -not ($_ -like "255.255.255.255*") -and
+                        -not ($_ -like "*-255.255.255.255")
+                    }
                     if ($remaining.Count -eq 0) {
                         $rule.RemoteAddresses = "255.255.255.255"
                         $rule.Enabled = $false
@@ -3391,6 +3431,8 @@ $btnUnbanAll.Add_Click({
     $confirm = [System.Windows.Forms.MessageBox]::Show("УВАГА! Ви дійсно хочете розблокувати ВСІ поточні IP-адреси у правилах блокування IPBan?`n`nПравила Білого списку (Whitelist) НЕ будуть видалені.", "Очищення всіх блокувань", [System.Windows.Forms.MessageBoxButtons]::YesNo, [System.Windows.Forms.MessageBoxIcon]::Warning)
     if ($confirm -eq [System.Windows.Forms.DialogResult]::Yes) {
         try {
+            $allBannedIps = @($script:LastBannedIPs | Where-Object { $_.ActionType -eq "Block" -and $_.IPAddress -notlike "255.255.255.255*" } | ForEach-Object { $_.IPAddress })
+
             $fw = New-Object -ComObject HNetCfg.FwPolicy2
             foreach ($rule in $fw.Rules) {
                 if ($rule.Name -like "IPBan*" -and $rule.Name -notlike "*Whitelist*" -and $rule.Action -eq 0) {
@@ -3398,10 +3440,17 @@ $btnUnbanAll.Add_Click({
                     $rule.Enabled = $false
                 }
             }
+            try {
+                $manualRule = $fw.Rules | Where-Object { $_.Name -eq "IPBan_Manual_Block" } | Select-Object -First 1
+                if ($manualRule) {
+                    $manualRule.RemoteAddresses = "255.255.255.255"
+                    $manualRule.Enabled = $false
+                }
+            } catch {}
+
             $path = Get-IPBanPath
             if (Test-Path $path) {
                 $unbanFile = Join-Path $path "unban.txt"
-                $allBannedIps = @($script:LastBannedIPs | Where-Object { $_.ActionType -eq "Block" } | ForEach-Object { $_.IPAddress })
                 if ($allBannedIps.Count -gt 0) {
                     $allBannedIps | Set-Content -Path $unbanFile -Encoding UTF8
                 }
