@@ -907,9 +907,13 @@ try {
 
 # 5. Видалення запису автозавантаження
 try {
-    $runReg = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Run"
-    if (Test-Path $runReg) {
-        Remove-ItemProperty -Path $runReg -Name "IPBanControlCenter" -ErrorAction SilentlyContinue
+    $runHklm = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Run"
+    if (Test-Path $runHklm) {
+        Remove-ItemProperty -Path $runHklm -Name "IPBanControlCenter" -ErrorAction SilentlyContinue
+    }
+    $runHkcu = "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Run"
+    if (Test-Path $runHkcu) {
+        Remove-ItemProperty -Path $runHkcu -Name "IPBanControlCenter" -ErrorAction SilentlyContinue
     }
 } catch {}
 
@@ -921,8 +925,12 @@ try {
     }
 } catch {}
 
-# 6b. Очищення налаштувань користувача в реєстрі HKCU
+# 6b. Очищення прив'язок та налаштувань у реєстрі HKLM та HKCU
 try {
+    $regM = "HKLM:\SOFTWARE\IPBanControlCenter"
+    if (Test-Path $regM) {
+        Remove-Item -Path $regM -Recurse -Force -ErrorAction SilentlyContinue
+    }
     $regU = "HKCU:\SOFTWARE\IPBanControlCenter"
     if (Test-Path $regU) {
         Remove-Item -Path $regU -Recurse -Force -ErrorAction SilentlyContinue
@@ -963,21 +971,38 @@ $doneTitle = if ($uninstLang -eq "EN") { "Uninstall Complete" } else { "Вида
         if (-not (Test-Path $regPath)) { New-Item -Path $regPath -Force | Out-Null }
         Set-ItemProperty -Path $regPath -Name "DisplayName" -Value "IPBan Manager & Control Center"
         Set-ItemProperty -Path $regPath -Name "DisplayIcon" -Value "$targetExe,0"
-        Set-ItemProperty -Path $regPath -Name "DisplayVersion" -Value "2.0.0"
+        Set-ItemProperty -Path $regPath -Name "DisplayVersion" -Value "2.1.0"
         Set-ItemProperty -Path $regPath -Name "Publisher" -Value "IPBan Community & Tooling"
         Set-ItemProperty -Path $regPath -Name "InstallLocation" -Value $targetDir
         Set-ItemProperty -Path $regPath -Name "UninstallString" -Value "powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$uninstallerPs1`""
         Set-ItemProperty -Path $regPath -Name "NoModify" -Value 1 -Type DWord
         Set-ItemProperty -Path $regPath -Name "NoRepair" -Value 1 -Type DWord
 
-        # 4. Створення ярликів
+        # Запис інформації про користувача, що встановив програму (для захисту від запуску у сторонніх RDP-сесіях)
+        $appReg = "HKLM:\SOFTWARE\IPBanControlCenter"
+        if (-not (Test-Path $appReg)) { New-Item -Path $appReg -Force | Out-Null }
+        $instUser = "$env:USERDOMAIN\$env:USERNAME"
+        $instSid = ""
+        try { $instSid = [System.Security.Principal.WindowsIdentity]::GetCurrent().User.Value } catch {}
+        Set-ItemProperty -Path $appReg -Name "InstalledUser" -Value $instUser -Force
+        if ($instSid) { Set-ItemProperty -Path $appReg -Name "InstalledUserSid" -Value $instSid -Force }
+        Log-Step "Прив'язка до облікового запису: $instUser"
+
+        # 4. Створення ярликів (тільки для поточного користувача)
         $pbInstall.Value = 70
         $wsh = New-Object -ComObject WScript.Shell
 
         if ($chkDesktop.Checked) {
             Log-Step "Створення ярлика на Робочому столі..."
-            $desktopDir = [System.Environment]::GetFolderPath([System.Environment+SpecialFolder]::CommonDesktopDirectory)
-            if (-not (Test-Path $desktopDir)) { $desktopDir = [System.Environment]::GetFolderPath([System.Environment+SpecialFolder]::Desktop) }
+            # Видаляємо спільний ярлик із Public Desktop, щоб він не з'являвся в усіх RDP сесіях
+            $commonDesktop = [System.Environment]::GetFolderPath([System.Environment+SpecialFolder]::CommonDesktopDirectory)
+            if ($commonDesktop) {
+                $oldPublicLnk = Join-Path $commonDesktop "IPBan Control Center.lnk"
+                if (Test-Path $oldPublicLnk) { Remove-Item $oldPublicLnk -Force -ErrorAction SilentlyContinue }
+            }
+
+            # Створюємо ТІЛЬКИ на робочому столі користувача, що встановлює
+            $desktopDir = [System.Environment]::GetFolderPath([System.Environment+SpecialFolder]::Desktop)
             $shortcutPath = Join-Path $desktopDir "IPBan Control Center.lnk"
             $sc = $wsh.CreateShortcut($shortcutPath)
             $sc.TargetPath = $targetExe
@@ -985,13 +1010,20 @@ $doneTitle = if ($uninstLang -eq "EN") { "Uninstall Complete" } else { "Вида
             $sc.IconLocation = "$targetExe,0"
             $sc.Description = "Центр керування та моніторингу DigitalRuby IPBan"
             $sc.Save()
-            Log-Step "  -> Ярлик створено: $shortcutPath"
+            Log-Step "  -> Ярлик створено для користувача: $shortcutPath"
         }
 
         if ($chkStartMenu.Checked) {
             Log-Step "Створення ярлика в меню «Пуск»..."
-            $startMenuDir = [System.Environment]::GetFolderPath([System.Environment+SpecialFolder]::CommonPrograms)
-            if (-not (Test-Path $startMenuDir)) { $startMenuDir = [System.Environment]::GetFolderPath([System.Environment+SpecialFolder]::Programs) }
+            # Видаляємо спільний ярлик із CommonPrograms
+            $commonPrograms = [System.Environment]::GetFolderPath([System.Environment+SpecialFolder]::CommonPrograms)
+            if ($commonPrograms) {
+                $oldPublicStart = Join-Path $commonPrograms "IPBan Control Center.lnk"
+                if (Test-Path $oldPublicStart) { Remove-Item $oldPublicStart -Force -ErrorAction SilentlyContinue }
+            }
+
+            # Створюємо ТІЛЬКИ в меню поточного користувача
+            $startMenuDir = [System.Environment]::GetFolderPath([System.Environment+SpecialFolder]::Programs)
             $shortcutStart = Join-Path $startMenuDir "IPBan Control Center.lnk"
             $sc2 = $wsh.CreateShortcut($shortcutStart)
             $sc2.TargetPath = $targetExe
@@ -999,16 +1031,23 @@ $doneTitle = if ($uninstLang -eq "EN") { "Uninstall Complete" } else { "Вида
             $sc2.IconLocation = "$targetExe,0"
             $sc2.Description = "Центр керування та моніторингу DigitalRuby IPBan"
             $sc2.Save()
-            Log-Step "  -> Ярлик створено: $shortcutStart"
+            Log-Step "  -> Ярлик створено для користувача: $shortcutStart"
         }
 
-        # 5. Автозавантаження
+        # 5. Автозавантаження (тільки для поточного користувача в HKCU)
+        # Обов'язково очищаємо HKLM Run, щоб програма НЕ стартувала в сторонніх RDP-юзерів!
+        $runHklm = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Run"
+        if (Test-Path $runHklm) {
+            Remove-ItemProperty -Path $runHklm -Name "IPBanControlCenter" -ErrorAction SilentlyContinue
+        }
+
         if ($chkAutostart.Checked) {
             $pbInstall.Value = 85
-            Log-Step "Налаштування автозавантаження Windows..."
-            $runReg = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Run"
-            Set-ItemProperty -Path $runReg -Name "IPBanControlCenter" -Value "`"$targetExe`""
-            Log-Step "  -> Додано в реєстр Run: $targetExe"
+            Log-Step "Налаштування автозавантаження Windows (тільки для поточного користувача)..."
+            $runHkcu = "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Run"
+            if (-not (Test-Path $runHkcu)) { New-Item -Path $runHkcu -Force | Out-Null }
+            Set-ItemProperty -Path $runHkcu -Name "IPBanControlCenter" -Value "`"$targetExe`"" -Force
+            Log-Step "  -> Додано в HKCU Run: $targetExe"
         }
 
         # 6. Служба IPBan
