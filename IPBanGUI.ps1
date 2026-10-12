@@ -1,4 +1,4 @@
-# ==============================================================================
+﻿# ==============================================================================
 # IPBan Manager & Control Center (GUI)
 # Повнофункціональний графічний інтерфейс для керування DigitalRuby IPBan Free
 # ==============================================================================
@@ -10,46 +10,13 @@ Add-Type -AssemblyName System.IO.Compression.FileSystem
 [System.Windows.Forms.Application]::EnableVisualStyles()
 
 # ------------------------------------------------------------------------------
-# Захист сесій: програма призначена виключно для користувача, що її встановив.
-# Вона НЕ запускається для сторонніх RDP користувачів.
+# Захист від автозапуску в сторонніх сесіях:
+# Видаляємо застарілий глобальний автозапуск із HKLM (залишаємо тільки в HKCU користувача)
 # ------------------------------------------------------------------------------
 try {
-    # 1. Завжди видаляємо помилковий загальносистемний автозапуск з HKLM, якщо він є
     $hklmRun = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Run"
     if (Test-Path $hklmRun) {
         Remove-ItemProperty -Path $hklmRun -Name "IPBanControlCenter" -ErrorAction SilentlyContinue
-    }
-
-    # 2. Перевірка дозволеного користувача (хто встановив)
-    $appReg = "HKLM:\SOFTWARE\IPBanControlCenter"
-    if (Test-Path $appReg) {
-        $instUser = (Get-ItemProperty -Path $appReg -Name "InstalledUser" -ErrorAction SilentlyContinue).InstalledUser
-        $instSid = (Get-ItemProperty -Path $appReg -Name "InstalledUserSid" -ErrorAction SilentlyContinue).InstalledUserSid
-
-        if ($instUser -or $instSid) {
-            $currUser = $env:USERNAME
-            $currDomainUser = "$env:USERDOMAIN\$env:USERNAME"
-            $currSid = ""
-            try { $currSid = [System.Security.Principal.WindowsIdentity]::GetCurrent().User.Value } catch {}
-
-            $isMatch = $false
-            if ($instSid -and $currSid -and ($currSid -eq $instSid)) {
-                $isMatch = $true
-            } elseif ($instUser -and ($currUser -eq $instUser -or $currDomainUser -eq $instUser)) {
-                $isMatch = $true
-            }
-
-            if (-not $isMatch) {
-                # Користувач не є тим, хто встановив програму - тихо виходимо!
-                exit 0
-            }
-        }
-    }
-
-    # 3. Якщо користувач не є адміністратором і сесія термінальна (RDP) - тихо виходимо
-    $isAdminCheck = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
-    if (-not $isAdminCheck -and [System.Windows.Forms.SystemInformation]::TerminalServerSession) {
-        exit 0
     }
 } catch {}
 

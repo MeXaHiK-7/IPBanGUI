@@ -164,32 +164,11 @@ namespace IPBanControlCenter {
                     extraArgs = " " + string.Join(" ", args);
                 }
 
-                // Захист сесій: перевірка, чи це користувач, який встановив програму.
-                // Вона не повинна запускатися для сторонніх RDP-юзерів.
+                // Очищаємо застарілий глобальний автозапуск із HKLM, якщо він ще існує
                 try {
-                    using (var rk = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(@"SOFTWARE\IPBanControlCenter")) {
-                        if (rk != null) {
-                            string installedUser = rk.GetValue("InstalledUser") as string;
-                            string installedSid = rk.GetValue("InstalledUserSid") as string;
-                            if (!string.IsNullOrEmpty(installedUser) || !string.IsNullOrEmpty(installedSid)) {
-                                string currentUser = Environment.UserName;
-                                string currentDomainUser = Environment.UserDomainName + "\\" + Environment.UserName;
-                                string currentSid = WindowsIdentity.GetCurrent().User != null ? WindowsIdentity.GetCurrent().User.Value : "";
-
-                                bool isMatch = false;
-                                if (!string.IsNullOrEmpty(installedSid) && string.Equals(currentSid, installedSid, StringComparison.OrdinalIgnoreCase)) {
-                                    isMatch = true;
-                                } else if (!string.IsNullOrEmpty(installedUser)) {
-                                    if (string.Equals(currentUser, installedUser, StringComparison.OrdinalIgnoreCase) ||
-                                        string.Equals(currentDomainUser, installedUser, StringComparison.OrdinalIgnoreCase)) {
-                                        isMatch = true;
-                                    }
-                                }
-
-                                if (!isMatch) {
-                                    return;
-                                }
-                            }
+                    using (var rk = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Microsoft\Windows\CurrentVersion\Run", true)) {
+                        if (rk != null && rk.GetValue("IPBanControlCenter") != null) {
+                            rk.DeleteValue("IPBanControlCenter", false);
                         }
                     }
                 } catch {}
@@ -198,11 +177,6 @@ namespace IPBanControlCenter {
                 try {
                     isAdmin = new WindowsPrincipal(WindowsIdentity.GetCurrent()).IsInRole(WindowsBuiltInRole.Administrator);
                 } catch {}
-
-                // Якщо користувач не є адміністратором і сесія RDP - тихо виходимо, не викликаючи UAC
-                if (!isAdmin && SystemInformation.TerminalServerSession) {
-                    return;
-                }
 
                 ProcessStartInfo psi = new ProcessStartInfo();
                 psi.FileName = "powershell.exe";

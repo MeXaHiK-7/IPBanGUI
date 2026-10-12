@@ -978,15 +978,11 @@ $doneTitle = if ($uninstLang -eq "EN") { "Uninstall Complete" } else { "Вида
         Set-ItemProperty -Path $regPath -Name "NoModify" -Value 1 -Type DWord
         Set-ItemProperty -Path $regPath -Name "NoRepair" -Value 1 -Type DWord
 
-        # Запис інформації про користувача, що встановив програму (для захисту від запуску у сторонніх RDP-сесіях)
+        # Запис системної інформації про встановлення
         $appReg = "HKLM:\SOFTWARE\IPBanControlCenter"
         if (-not (Test-Path $appReg)) { New-Item -Path $appReg -Force | Out-Null }
-        $instUser = "$env:USERDOMAIN\$env:USERNAME"
-        $instSid = ""
-        try { $instSid = [System.Security.Principal.WindowsIdentity]::GetCurrent().User.Value } catch {}
-        Set-ItemProperty -Path $appReg -Name "InstalledUser" -Value $instUser -Force
-        if ($instSid) { Set-ItemProperty -Path $appReg -Name "InstalledUserSid" -Value $instSid -Force }
-        Log-Step "Прив'язка до облікового запису: $instUser"
+        Set-ItemProperty -Path $appReg -Name "InstallPath" -Value $targetDir -Force
+        Set-ItemProperty -Path $appReg -Name "InstallDate" -Value (Get-Date -Format "yyyy-MM-dd HH:mm:ss") -Force
 
         # 4. Створення ярликів (тільки для поточного користувача)
         $pbInstall.Value = 70
