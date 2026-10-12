@@ -48,7 +48,7 @@ try {
 # ------------------------------------------------------------------------------
 # Глобальні змінні та стан
 # ------------------------------------------------------------------------------
-$script:AppVersion = "v2.1.1"
+$script:AppVersion = "v2.1.2"
 $script:DefaultInstallPath = "C:\Program Files\IPBan"
 $script:CurrentInstallPath = $script:DefaultInstallPath
 $script:ServiceName = "IPBan"
@@ -195,7 +195,8 @@ $script:I18N = @{
         "ColHourAttacks" = "Кількість подій"
         "ColHourBar" = "Рівень активності"
         "BtnRefreshStats" = "Оновити статистику"
-        "PeakNotice" = "⚠️ Найвища активність атак зафіксована у проміжку: {0}:00 - {1}:00 ({2} атак)"
+        "PeakNotice" = "[!] Найвища активність атак зафіксована у проміжку: {0}:00 - {1}:00 ({2} атак)"
+        "NoActiveBans" = "Активних блокувань немає"
         "ResolvingCountry" = "🌐 Визначення..."
         "LocalNetwork" = "Локальна мережа"
         "UnknownCountry" = "Невідомо"
@@ -322,7 +323,8 @@ $script:I18N = @{
         "ColHourAttacks" = "Event Count"
         "ColHourBar" = "Activity Level"
         "BtnRefreshStats" = "Refresh Analytics"
-        "PeakNotice" = "⚠️ Peak attack activity detected at {0}:00 - {1}:00 ({2} attacks)"
+        "PeakNotice" = "[!] Peak attack activity detected at {0}:00 - {1}:00 ({2} attacks)"
+        "NoActiveBans" = "No active bans"
         "ResolvingCountry" = "🌐 Resolving..."
         "LocalNetwork" = "Local Network"
         "UnknownCountry" = "Unknown"
@@ -1638,7 +1640,7 @@ $layoutStats = New-Object System.Windows.Forms.TableLayoutPanel
 $layoutStats.Dock = [System.Windows.Forms.DockStyle]::Fill
 $layoutStats.RowCount = 3
 $layoutStats.ColumnCount = 1
-$layoutStats.RowStyles.Add((New-Object System.Windows.Forms.RowStyle([System.Windows.Forms.SizeType]::Absolute, 74)))
+$layoutStats.RowStyles.Add((New-Object System.Windows.Forms.RowStyle([System.Windows.Forms.SizeType]::Absolute, 86)))
 $layoutStats.RowStyles.Add((New-Object System.Windows.Forms.RowStyle([System.Windows.Forms.SizeType]::Percent, 100)))
 $layoutStats.RowStyles.Add((New-Object System.Windows.Forms.RowStyle([System.Windows.Forms.SizeType]::Absolute, 40)))
 $tabStats.Controls.Add($layoutStats)
@@ -1661,22 +1663,21 @@ $cardTotalBanned.Dock = [System.Windows.Forms.DockStyle]::Fill
 $cardTotalBanned.BackColor = [System.Drawing.Color]::FromArgb(239, 246, 255)
 $cardTotalBanned.BorderStyle = [System.Windows.Forms.BorderStyle]::FixedSingle
 $cardTotalBanned.Margin = New-Object System.Windows.Forms.Padding(3)
-$cardTotalBanned.Padding = New-Object System.Windows.Forms.Padding(6, 4, 6, 2)
+$cardTotalBanned.Padding = New-Object System.Windows.Forms.Padding(8, 6, 8, 4)
 
 $lblCardTotalBannedTitle = New-Object System.Windows.Forms.Label
 $lblCardTotalBannedTitle.Text = (T "CardTotalBanned")
-$lblCardTotalBannedTitle.Font = New-Object System.Drawing.Font("Segoe UI", 8.25)
+$lblCardTotalBannedTitle.Font = New-Object System.Drawing.Font("Segoe UI", 8.5)
 $lblCardTotalBannedTitle.ForeColor = [System.Drawing.Color]::FromArgb(71, 85, 105)
-$lblCardTotalBannedTitle.Dock = [System.Windows.Forms.DockStyle]::Top
-$lblCardTotalBannedTitle.Height = 18
+$lblCardTotalBannedTitle.Location = New-Object System.Drawing.Point(8, 6)
+$lblCardTotalBannedTitle.AutoSize = $true
 
 $lblCardTotalBannedVal = New-Object System.Windows.Forms.Label
 $lblCardTotalBannedVal.Text = "0"
 $lblCardTotalBannedVal.Font = New-Object System.Drawing.Font("Segoe UI", 15, [System.Drawing.FontStyle]::Bold)
 $lblCardTotalBannedVal.ForeColor = [System.Drawing.Color]::FromArgb(30, 64, 175)
-$lblCardTotalBannedVal.Dock = [System.Windows.Forms.DockStyle]::Fill
-$lblCardTotalBannedVal.TextAlign = [System.Drawing.ContentAlignment]::MiddleLeft
-$lblCardTotalBannedVal.AutoEllipsis = $true
+$lblCardTotalBannedVal.Location = New-Object System.Drawing.Point(8, 28)
+$lblCardTotalBannedVal.AutoSize = $true
 
 $cardTotalBanned.Controls.Add($lblCardTotalBannedVal)
 $cardTotalBanned.Controls.Add($lblCardTotalBannedTitle)
@@ -1688,22 +1689,21 @@ $cardUniqueCountries.Dock = [System.Windows.Forms.DockStyle]::Fill
 $cardUniqueCountries.BackColor = [System.Drawing.Color]::FromArgb(236, 253, 245)
 $cardUniqueCountries.BorderStyle = [System.Windows.Forms.BorderStyle]::FixedSingle
 $cardUniqueCountries.Margin = New-Object System.Windows.Forms.Padding(3)
-$cardUniqueCountries.Padding = New-Object System.Windows.Forms.Padding(6, 4, 6, 2)
+$cardUniqueCountries.Padding = New-Object System.Windows.Forms.Padding(8, 6, 8, 4)
 
 $lblCardUniqueCountriesTitle = New-Object System.Windows.Forms.Label
 $lblCardUniqueCountriesTitle.Text = (T "CardUniqueCountries")
-$lblCardUniqueCountriesTitle.Font = New-Object System.Drawing.Font("Segoe UI", 8.25)
+$lblCardUniqueCountriesTitle.Font = New-Object System.Drawing.Font("Segoe UI", 8.5)
 $lblCardUniqueCountriesTitle.ForeColor = [System.Drawing.Color]::FromArgb(71, 85, 105)
-$lblCardUniqueCountriesTitle.Dock = [System.Windows.Forms.DockStyle]::Top
-$lblCardUniqueCountriesTitle.Height = 18
+$lblCardUniqueCountriesTitle.Location = New-Object System.Drawing.Point(8, 6)
+$lblCardUniqueCountriesTitle.AutoSize = $true
 
 $lblCardUniqueCountriesVal = New-Object System.Windows.Forms.Label
 $lblCardUniqueCountriesVal.Text = "0"
 $lblCardUniqueCountriesVal.Font = New-Object System.Drawing.Font("Segoe UI", 15, [System.Drawing.FontStyle]::Bold)
 $lblCardUniqueCountriesVal.ForeColor = [System.Drawing.Color]::FromArgb(6, 95, 70)
-$lblCardUniqueCountriesVal.Dock = [System.Windows.Forms.DockStyle]::Fill
-$lblCardUniqueCountriesVal.TextAlign = [System.Drawing.ContentAlignment]::MiddleLeft
-$lblCardUniqueCountriesVal.AutoEllipsis = $true
+$lblCardUniqueCountriesVal.Location = New-Object System.Drawing.Point(8, 28)
+$lblCardUniqueCountriesVal.AutoSize = $true
 
 $cardUniqueCountries.Controls.Add($lblCardUniqueCountriesVal)
 $cardUniqueCountries.Controls.Add($lblCardUniqueCountriesTitle)
@@ -1715,22 +1715,24 @@ $cardTopCountry.Dock = [System.Windows.Forms.DockStyle]::Fill
 $cardTopCountry.BackColor = [System.Drawing.Color]::FromArgb(255, 241, 242)
 $cardTopCountry.BorderStyle = [System.Windows.Forms.BorderStyle]::FixedSingle
 $cardTopCountry.Margin = New-Object System.Windows.Forms.Padding(3)
-$cardTopCountry.Padding = New-Object System.Windows.Forms.Padding(6, 4, 6, 2)
+$cardTopCountry.Padding = New-Object System.Windows.Forms.Padding(8, 6, 8, 4)
 
 $lblCardTopCountryTitle = New-Object System.Windows.Forms.Label
 $lblCardTopCountryTitle.Text = (T "CardTopCountry")
-$lblCardTopCountryTitle.Font = New-Object System.Drawing.Font("Segoe UI", 8.25)
+$lblCardTopCountryTitle.Font = New-Object System.Drawing.Font("Segoe UI", 8.5)
 $lblCardTopCountryTitle.ForeColor = [System.Drawing.Color]::FromArgb(71, 85, 105)
-$lblCardTopCountryTitle.Dock = [System.Windows.Forms.DockStyle]::Top
-$lblCardTopCountryTitle.Height = 18
+$lblCardTopCountryTitle.Location = New-Object System.Drawing.Point(8, 6)
+$lblCardTopCountryTitle.AutoSize = $true
 
 $lblCardTopCountryVal = New-Object System.Windows.Forms.Label
 $lblCardTopCountryVal.Text = "—"
-$lblCardTopCountryVal.Font = New-Object System.Drawing.Font("Segoe UI", 12, [System.Drawing.FontStyle]::Bold)
+$lblCardTopCountryVal.Font = New-Object System.Drawing.Font("Segoe UI", 11.5, [System.Drawing.FontStyle]::Bold)
 $lblCardTopCountryVal.ForeColor = [System.Drawing.Color]::FromArgb(159, 18, 57)
-$lblCardTopCountryVal.Dock = [System.Windows.Forms.DockStyle]::Fill
-$lblCardTopCountryVal.TextAlign = [System.Drawing.ContentAlignment]::MiddleLeft
+$lblCardTopCountryVal.Location = New-Object System.Drawing.Point(8, 28)
+$lblCardTopCountryVal.Size = New-Object System.Drawing.Size(240, 36)
+$lblCardTopCountryVal.TextAlign = [System.Drawing.ContentAlignment]::TopLeft
 $lblCardTopCountryVal.AutoEllipsis = $true
+$lblCardTopCountryVal.Anchor = ([System.Windows.Forms.AnchorStyles]::Top -bor [System.Windows.Forms.AnchorStyles]::Left -bor [System.Windows.Forms.AnchorStyles]::Right)
 
 $cardTopCountry.Controls.Add($lblCardTopCountryVal)
 $cardTopCountry.Controls.Add($lblCardTopCountryTitle)
@@ -1742,22 +1744,21 @@ $cardPeakHour.Dock = [System.Windows.Forms.DockStyle]::Fill
 $cardPeakHour.BackColor = [System.Drawing.Color]::FromArgb(255, 251, 235)
 $cardPeakHour.BorderStyle = [System.Windows.Forms.BorderStyle]::FixedSingle
 $cardPeakHour.Margin = New-Object System.Windows.Forms.Padding(3)
-$cardPeakHour.Padding = New-Object System.Windows.Forms.Padding(6, 4, 6, 2)
+$cardPeakHour.Padding = New-Object System.Windows.Forms.Padding(8, 6, 8, 4)
 
 $lblCardPeakHourTitle = New-Object System.Windows.Forms.Label
 $lblCardPeakHourTitle.Text = (T "CardPeakHour")
-$lblCardPeakHourTitle.Font = New-Object System.Drawing.Font("Segoe UI", 8.25)
+$lblCardPeakHourTitle.Font = New-Object System.Drawing.Font("Segoe UI", 8.5)
 $lblCardPeakHourTitle.ForeColor = [System.Drawing.Color]::FromArgb(71, 85, 105)
-$lblCardPeakHourTitle.Dock = [System.Windows.Forms.DockStyle]::Top
-$lblCardPeakHourTitle.Height = 18
+$lblCardPeakHourTitle.Location = New-Object System.Drawing.Point(8, 6)
+$lblCardPeakHourTitle.AutoSize = $true
 
 $lblCardPeakHourVal = New-Object System.Windows.Forms.Label
 $lblCardPeakHourVal.Text = "—"
-$lblCardPeakHourVal.Font = New-Object System.Drawing.Font("Segoe UI", 13, [System.Drawing.FontStyle]::Bold)
+$lblCardPeakHourVal.Font = New-Object System.Drawing.Font("Segoe UI", 12.5, [System.Drawing.FontStyle]::Bold)
 $lblCardPeakHourVal.ForeColor = [System.Drawing.Color]::FromArgb(146, 64, 14)
-$lblCardPeakHourVal.Dock = [System.Windows.Forms.DockStyle]::Fill
-$lblCardPeakHourVal.TextAlign = [System.Drawing.ContentAlignment]::MiddleLeft
-$lblCardPeakHourVal.AutoEllipsis = $true
+$lblCardPeakHourVal.Location = New-Object System.Drawing.Point(8, 28)
+$lblCardPeakHourVal.AutoSize = $true
 
 $cardPeakHour.Controls.Add($lblCardPeakHourVal)
 $cardPeakHour.Controls.Add($lblCardPeakHourTitle)
@@ -3029,21 +3030,25 @@ function Update-StatsUI {
     $topCountryText = "—"
     $topCountryShare = 0.0
 
-    foreach ($entry in $sortedCountries) {
-        $share = if ($totalBanned -gt 0) { [Math]::Round(($entry.Count / [double]$totalBanned) * 100.0, 1) } else { 0.0 }
-        $bar = Get-VisualBar $share 12
-        if ($rank -eq 1 -and $totalBanned -gt 0) {
-            $topCountryText = "$($entry.Flag) $($entry.Name)"
-            $topCountryShare = $share
+    if ($sortedCountries.Count -eq 0) {
+        [void]$dgvCountryStats.Rows.Add("—", (T "NoActiveBans"), "0", "0%", "—")
+    } else {
+        foreach ($entry in $sortedCountries) {
+            $share = if ($totalBanned -gt 0) { [Math]::Round(($entry.Count / [double]$totalBanned) * 100.0, 1) } else { 0.0 }
+            $bar = Get-VisualBar $share 12
+            if ($rank -eq 1 -and $totalBanned -gt 0) {
+                $topCountryText = "$($entry.Flag) $($entry.Name)"
+                $topCountryShare = $share
+            }
+            $rIdx = $dgvCountryStats.Rows.Add(
+                $rank,
+                $entry.Key,
+                $entry.Count,
+                "$share%",
+                $bar
+            )
+            $rank++
         }
-        $rIdx = $dgvCountryStats.Rows.Add(
-            $rank,
-            $entry.Key,
-            $entry.Count,
-            "$share%",
-            $bar
-        )
-        $rank++
     }
 
     # 2. Розподіл за 24 годинами (00:00 - 23:00)

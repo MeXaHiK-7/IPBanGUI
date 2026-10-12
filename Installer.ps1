@@ -989,7 +989,7 @@ $doneTitle = if ($uninstLang -eq "EN") { "Uninstall Complete" } else { "Вида
         if (-not (Test-Path $regPath)) { New-Item -Path $regPath -Force | Out-Null }
         Set-ItemProperty -Path $regPath -Name "DisplayName" -Value "IPBan Manager & Control Center"
         Set-ItemProperty -Path $regPath -Name "DisplayIcon" -Value "$targetExe,0"
-        Set-ItemProperty -Path $regPath -Name "DisplayVersion" -Value "2.1.1"
+        Set-ItemProperty -Path $regPath -Name "DisplayVersion" -Value "2.1.2"
         Set-ItemProperty -Path $regPath -Name "Publisher" -Value "IPBan Community & Tooling"
         Set-ItemProperty -Path $regPath -Name "InstallLocation" -Value $targetDir
         Set-ItemProperty -Path $regPath -Name "UninstallString" -Value "powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$uninstallerPs1`""
