@@ -67,7 +67,7 @@ try {
 # ------------------------------------------------------------------------------
 # Глобальні змінні та стан
 # ------------------------------------------------------------------------------
-$script:AppVersion = "v2.2.0"
+$script:AppVersion = "v2.2.1"
 $script:DefaultInstallPath = "C:\Program Files\IPBan"
 $script:CurrentInstallPath = $script:DefaultInstallPath
 $script:ServiceName = "IPBan"
@@ -283,6 +283,11 @@ $script:I18N = @{
         "LblAbuseLimit" = "Кількість IP для завантаження (Limit):"
         "ChkAbuseAutoReport" = "Автоматично надсилати репорти про атаки в AbuseIPDB (за замовчуванням: ВИМКНЕНО)"
         "BtnFetchAbuse" = "📥 Завантажити чорний список з AbuseIPDB"
+        "BtnCheckUpdate" = "Перевірити оновлення"
+        "UpdateChecking" = "Перевірка нових версій на GitHub..."
+        "UpdateLatest" = "У вас встановлена найновіша версія ({0}). Оновлень немає."
+        "UpdateAvailableTitle" = "Доступна нова версія {0}!"
+        "UpdateAvailableMsg" = "Вийшла нова версія IPBan Control Center: {0}`n`nПоточна версія: {1}`n`nБажаєте відкрити сторінку релізу та завантажити оновлення зараз?"
         "BtnSaveConfig" = "Зберегти налаштування у файл"
         "BtnReloadConfig" = "Скинути до значень файлу"
         "BtnRestoreBak" = "Відновити з бекапу (.bak)"
@@ -422,6 +427,11 @@ $script:I18N = @{
         "LblAbuseLimit" = "Download IP Limit:"
         "ChkAbuseAutoReport" = "Automatically report attack attempts to AbuseIPDB (Default: DISABLED)"
         "BtnFetchAbuse" = "📥 Download Blacklist from AbuseIPDB"
+        "BtnCheckUpdate" = "Check for Updates"
+        "UpdateChecking" = "Checking for new versions on GitHub..."
+        "UpdateLatest" = "You have the latest version ({0}). No updates available."
+        "UpdateAvailableTitle" = "New version {0} is available!"
+        "UpdateAvailableMsg" = "A newer version of IPBan Control Center is available: {0}`n`nCurrent version: {1}`n`nWould you like to open the release page and download the update now?"
         "BtnSaveConfig" = "Save Settings to File"
         "BtnReloadConfig" = "Reset to File Values"
         "BtnRestoreBak" = "Restore from Backup (.bak)"
@@ -2197,7 +2207,13 @@ foreach ($proto in $script:MonitoredProtocols) {
             $badge.BackColor = [System.Drawing.Color]::FromArgb(241, 245, 249)
         }
     }
-    $chkProto.Add_CheckedChanged({ & $updateBadge $chkProto $lblBadge })
+
+    $cRef = $chkProto
+    $bRef = $lblBadge
+    $handler = {
+        & $updateBadge $cRef $bRef
+    }.GetNewClosure()
+    $chkProto.Add_CheckedChanged($handler)
     & $updateBadge $chkProto $lblBadge
 
     $script:ProtocolControls[$proto.Id] = @{
@@ -2239,7 +2255,7 @@ $llGetAbuseKey.Font = New-Object System.Drawing.Font("Segoe UI", 8.5)
 $llGetAbuseKey.Location = New-Object System.Drawing.Point(770, 33)
 $llGetAbuseKey.AutoSize = $true
 $llGetAbuseKey.Add_Click({
-    try { [System.Diagnostics.Process]::Start("https://www.abuseipdb.com/account/api") } catch {}
+    try { [System.Diagnostics.Process]::Start("https://www.abuseipdb.com/register") } catch {}
 })
 $gbAbuseIPDB.Controls.Add($llGetAbuseKey)
 
@@ -2696,6 +2712,16 @@ $llWiki.Location = New-Object System.Drawing.Point(20, 60)
 $llWiki.AutoSize = $true
 $gbLinks.Controls.Add($llWiki)
 
+$btnCheckUpdate = New-Object System.Windows.Forms.Button
+$btnCheckUpdate.Text = "🔍 " + (T "BtnCheckUpdate")
+$btnCheckUpdate.Font = New-Object System.Drawing.Font("Segoe UI", 9, [System.Drawing.FontStyle]::Bold)
+$btnCheckUpdate.Location = New-Object System.Drawing.Point(620, 32)
+$btnCheckUpdate.Size = New-Object System.Drawing.Size(220, 34)
+$btnCheckUpdate.BackColor = [System.Drawing.Color]::FromArgb(238, 242, 255)
+$btnCheckUpdate.ForeColor = [System.Drawing.Color]::FromArgb(67, 56, 202)
+$gbLinks.Controls.Add($btnCheckUpdate)
+Set-SmoothButton $btnCheckUpdate 6 ([System.Drawing.Color]::FromArgb(199, 210, 254))
+
 # ------------------------------------------------------------------------------
 # 4. Нижня смуга стану (StatusStrip)
 # ------------------------------------------------------------------------------
@@ -2860,6 +2886,7 @@ function Update-UILanguage {
     $gbLinks.Text = T "GbLinks"
     $llGithub.Text = T "LlGithub"
     $llWiki.Text = T "LlWiki"
+    if ($btnCheckUpdate) { $btnCheckUpdate.Text = "🔍 " + (T "BtnCheckUpdate") }
 
     $statusLabel.Text = T "StatusReady"
     $statusAdmin.Text = if ($script:IsAdmin) { T "AdminYes" } else { T "AdminNo" }
@@ -4565,6 +4592,56 @@ $llWiki.Add_LinkClicked({
     [System.Diagnostics.Process]::Start("https://github.com/DigitalRuby/IPBan/wiki/Configuration")
 })
 
+function Check-AppUpdate([bool]$silentIfLatest = $false) {
+    try {
+        [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 -bor [Net.SecurityProtocolType]::Tls13
+        $headers = @{ "User-Agent" = "IPBanControlCenter-Updater" }
+        $apiUrl = "https://api.github.com/repos/MeXaHiK-7/IPBanGUI/releases/latest"
+        $rel = Invoke-RestMethod -Uri $apiUrl -Headers $headers -TimeoutSec 10
+
+        $latestTag = $rel.tag_name # e.g. "v2.2.0"
+        $currentTag = $script:AppVersion # e.g. "v2.2.0"
+
+        $parseVer = {
+            param([string]$t)
+            $clean = $t.TrimStart("v").Trim()
+            $parts = $clean.Split(".")
+            $major = if ($parts.Length -ge 1) { [int]$parts[0] } else { 0 }
+            $minor = if ($parts.Length -ge 2) { [int]$parts[1] } else { 0 }
+            $build = if ($parts.Length -ge 3) { [int]$parts[2] } else { 0 }
+            return New-Object System.Version($major, $minor, $build)
+        }
+
+        $vLatest = & $parseVer $latestTag
+        $vCurrent = & $parseVer $currentTag
+
+        if ($vLatest -gt $vCurrent) {
+            $msg = [string]::Format((T "UpdateAvailableMsg"), $latestTag, $currentTag)
+            $title = [string]::Format((T "UpdateAvailableTitle"), $latestTag)
+            $ans = [System.Windows.Forms.MessageBox]::Show($form, $msg, $title, [System.Windows.Forms.MessageBoxButtons]::YesNo, [System.Windows.Forms.MessageBoxIcon]::Information)
+            if ($ans -eq [System.Windows.Forms.DialogResult]::Yes) {
+                $targetUrl = if ($rel.html_url) { $rel.html_url } else { "https://github.com/MeXaHiK-7/IPBanGUI/releases" }
+                [System.Diagnostics.Process]::Start($targetUrl)
+            }
+        } else {
+            if (-not $silentIfLatest) {
+                $msg = [string]::Format((T "UpdateLatest"), $currentTag)
+                [System.Windows.Forms.MessageBox]::Show($form, $msg, (T "BtnCheckUpdate"), [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Information)
+            }
+        }
+    } catch {
+        if (-not $silentIfLatest) {
+            [System.Windows.Forms.MessageBox]::Show($form, "Не вдалося перевірити оновлення на GitHub:`n$($_.Exception.Message)", "Помилка оновлення", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Warning)
+        }
+    }
+}
+
+$btnCheckUpdate.Add_Click({
+    $statusLabel.Text = T "UpdateChecking"
+    Check-AppUpdate -silentIfLatest $false
+    $statusLabel.Text = T "StatusReady"
+})
+
 # Перемикання вкладок
 $tabControl.Add_SelectedIndexChanged({
     if ($tabControl.SelectedTab -eq $tabStats) {
@@ -4609,6 +4686,16 @@ function Initialize-App {
         $script:GeoIPTimer.Add_Tick({ Resolve-NextPendingGeoIP })
         $script:GeoIPTimer.Start()
     }
+
+    # Фонова перевірка оновлень IPBan Control Center при відкритті програми
+    $script:UpdateCheckTimer = New-Object System.Windows.Forms.Timer
+    $script:UpdateCheckTimer.Interval = 4000
+    $script:UpdateCheckTimer.Add_Tick({
+        $script:UpdateCheckTimer.Stop()
+        $script:UpdateCheckTimer.Dispose()
+        Check-AppUpdate -silentIfLatest $true
+    })
+    $script:UpdateCheckTimer.Start()
 }
 
 $form.Add_Shown({
