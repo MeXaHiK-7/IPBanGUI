@@ -1,4 +1,10 @@
-﻿# ==============================================================================
+﻿param(
+    [switch]$tray,
+    [switch]$minimized,
+    [switch]$show
+)
+
+# ==============================================================================
 # IPBan Manager & Control Center (GUI)
 # Повнофункціональний графічний інтерфейс для керування DigitalRuby IPBan Free
 # ==============================================================================
@@ -35,6 +41,19 @@ try {
 [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
 '@ -Name "User32SingleInstance" -Namespace "Win32" -PassThru -ErrorAction SilentlyContinue
             if ($user32) {
+                # 1. Відновлення за збереженим хендлом з реєстру (активує навіть якщо вікно сховане у трей)
+                try {
+                    $regU = "HKCU:\SOFTWARE\IPBanControlCenter"
+                    if (Test-Path $regU) {
+                        $hVal = (Get-ItemProperty -Path $regU -Name "WindowHandle" -ErrorAction SilentlyContinue).WindowHandle
+                        if ($hVal) {
+                            $savedH = [IntPtr]$hVal
+                            [Win32.User32SingleInstance]::ShowWindow($savedH, 9) | Out-Null
+                            [Win32.User32SingleInstance]::SetForegroundWindow($savedH) | Out-Null
+                        }
+                    }
+                } catch {}
+
                 Get-Process | Where-Object { $_.MainWindowTitle -like "IPBan*Control Center*" -and $_.Id -ne $PID } | ForEach-Object {
                     [Win32.User32SingleInstance]::ShowWindow($_.MainWindowHandle, 9)
                     [Win32.User32SingleInstance]::SetForegroundWindow($_.MainWindowHandle)
@@ -48,11 +67,23 @@ try {
 # ------------------------------------------------------------------------------
 # Глобальні змінні та стан
 # ------------------------------------------------------------------------------
-$script:AppVersion = "v2.1.3"
+$script:AppVersion = "v2.1.4"
 $script:DefaultInstallPath = "C:\Program Files\IPBan"
 $script:CurrentInstallPath = $script:DefaultInstallPath
 $script:ServiceName = "IPBan"
 $script:LocalZipBackup = $null
+$script:AppContext = $null
+
+# Визначення режиму запуску (у системний трей за замовчуванням чи у вікно)
+$regStartInTray = 1
+try {
+    $regU = "HKCU:\SOFTWARE\IPBanControlCenter"
+    if (Test-Path $regU) {
+        $val = (Get-ItemProperty -Path $regU -Name "StartInTray" -ErrorAction SilentlyContinue).StartInTray
+        if ($null -ne $val) { $regStartInTray = [int]$val }
+    }
+} catch {}
+$script:StartInTray = ($tray -or $minimized -or ($regStartInTray -ne 0)) -and (-not $show)
 $script:IsAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 $script:AutoRefreshTimer = $null
 $script:LastBannedIPs = @()
@@ -216,6 +247,7 @@ $script:I18N = @{
         "ChkClearOnSuccess" = "Скидати лічильник невдалих спроб при успішному вході (ClearFailedLoginsOnSuccessfulLogin)"
         "ChkProcessInternal" = "Обробляти та блокувати внутрішні локальні IP-адреси (ProcessInternalIPAddresses)"
         "ChkResetUnbanned" = "Скидати лічильник після розблокування IP (ResetFailedLoginCountForUnbannedIPAddresses)"
+        "ChkStartInTray" = "Запускати програму згорнутою у системний трей (Start in tray)"
         "BtnSaveConfig" = "Зберегти налаштування у файл"
         "BtnReloadConfig" = "Скинути до значень файлу"
         "BtnRestoreBak" = "Відновити з бекапу (.bak)"
@@ -344,6 +376,7 @@ $script:I18N = @{
         "ChkClearOnSuccess" = "Reset failed attempts counter on successful login (ClearFailedLoginsOnSuccessfulLogin)"
         "ChkProcessInternal" = "Process and ban internal/local IP addresses (ProcessInternalIPAddresses)"
         "ChkResetUnbanned" = "Reset counter after unbanning an IP (ResetFailedLoginCountForUnbannedIPAddresses)"
+        "ChkStartInTray" = "Start application minimized to system tray"
         "BtnSaveConfig" = "Save Settings to File"
         "BtnReloadConfig" = "Reset to File Values"
         "BtnRestoreBak" = "Restore from Backup (.bak)"
@@ -735,7 +768,8 @@ function Install-IPBanFromArchive {
     if (-not (Test-Path $exePath)) {
         throw "Не знайдено файл DigitalRuby.IPBan.exe у $destPath після розпакування!"
     }
-    & sc.exe create $script:ServiceName binPath= "`"$exePath`"" start= delayed-auto
+    & sc.exe create $script:ServiceName binPath= "`"$exePath`"" start= auto
+    & sc.exe failure $script:ServiceName reset= 86400 actions= restart/60000/restart/60000/restart/60000 | Out-Null
     Start-Sleep -Seconds 1
     Start-Service $script:ServiceName
 }
@@ -1994,7 +2028,7 @@ $gbBehavior = New-Object System.Windows.Forms.GroupBox
 $gbBehavior.Text = "Додаткова поведінка та очищення"
 $gbBehavior.Font = New-Object System.Drawing.Font("Segoe UI", 9.5, [System.Drawing.FontStyle]::Bold)
 $gbBehavior.Location = New-Object System.Drawing.Point(20, 245)
-$gbBehavior.Size = New-Object System.Drawing.Size(990, 160)
+$gbBehavior.Size = New-Object System.Drawing.Size(990, 190)
 $scrollSettings.Controls.Add($gbBehavior)
 
 $chkClearOnRestart = New-Object System.Windows.Forms.CheckBox
@@ -2025,6 +2059,14 @@ $chkResetUnbanned.Location = New-Object System.Drawing.Point(20, 120)
 $chkResetUnbanned.AutoSize = $true
 $gbBehavior.Controls.Add($chkResetUnbanned)
 
+$chkStartInTray = New-Object System.Windows.Forms.CheckBox
+$chkStartInTray.Text = (T "ChkStartInTray")
+$chkStartInTray.Font = New-Object System.Drawing.Font("Segoe UI", 9)
+$chkStartInTray.Location = New-Object System.Drawing.Point(20, 150)
+$chkStartInTray.AutoSize = $true
+$chkStartInTray.Checked = $true
+$gbBehavior.Controls.Add($chkStartInTray)
+
 # Панель кнопок збереження налаштувань
 $btnSaveConfig = New-Object System.Windows.Forms.Button
 $btnSaveConfig.Text = "Зберегти налаштування у файл"
@@ -2033,21 +2075,21 @@ $btnSaveConfig.BackColor = [System.Drawing.Color]::FromArgb(22, 163, 74)
 $btnSaveConfig.ForeColor = [System.Drawing.Color]::White
 $btnSaveConfig.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
 $btnSaveConfig.FlatAppearance.BorderSize = 0
-$btnSaveConfig.Location = New-Object System.Drawing.Point(20, 420)
+$btnSaveConfig.Location = New-Object System.Drawing.Point(20, 450)
 $btnSaveConfig.Size = New-Object System.Drawing.Size(260, 38)
 $scrollSettings.Controls.Add($btnSaveConfig)
 
 $btnReloadConfig = New-Object System.Windows.Forms.Button
 $btnReloadConfig.Text = "Скинути до значень файлу"
 $btnReloadConfig.Font = New-Object System.Drawing.Font("Segoe UI", 9)
-$btnReloadConfig.Location = New-Object System.Drawing.Point(290, 420)
+$btnReloadConfig.Location = New-Object System.Drawing.Point(290, 450)
 $btnReloadConfig.Size = New-Object System.Drawing.Size(210, 38)
 $scrollSettings.Controls.Add($btnReloadConfig)
 
 $btnRestoreBak = New-Object System.Windows.Forms.Button
 $btnRestoreBak.Text = "Відновити з бекапу (.bak)"
 $btnRestoreBak.Font = New-Object System.Drawing.Font("Segoe UI", 9)
-$btnRestoreBak.Location = New-Object System.Drawing.Point(510, 420)
+$btnRestoreBak.Location = New-Object System.Drawing.Point(510, 450)
 $btnRestoreBak.Size = New-Object System.Drawing.Size(210, 38)
 $scrollSettings.Controls.Add($btnRestoreBak)
 
@@ -2511,6 +2553,7 @@ function Update-UILanguage {
     $chkClearOnSuccess.Text = T "ChkClearOnSuccess"
     $chkProcessInternal.Text = T "ChkProcessInternal"
     $chkResetUnbanned.Text = T "ChkResetUnbanned"
+    if ($chkStartInTray) { $chkStartInTray.Text = T "ChkStartInTray" }
     $btnSaveConfig.Text = T "BtnSaveConfig"
     $btnReloadConfig.Text = T "BtnReloadConfig"
     $btnRestoreBak.Text = T "BtnRestoreBak"
@@ -2649,6 +2692,8 @@ function Init-Tray {
     $script:tmiExit.Add_Click({
         $script:IsExiting = $true
         $form.Close()
+        if ($script:AppContext) { $script:AppContext.ExitThread() }
+        [System.Windows.Forms.Application]::Exit()
     })
 
     $script:TrayIcon.ContextMenuStrip = $script:TrayMenu
@@ -3188,6 +3233,18 @@ function Load-ConfigData {
         $valResetUnbanned = Get-XmlKey "ResetFailedLoginCountForUnbannedIPAddresses"
         $chkResetUnbanned.Checked = ($valResetUnbanned -eq "true")
 
+        try {
+            $regU = "HKCU:\SOFTWARE\IPBanControlCenter"
+            if (Test-Path $regU) {
+                $valTray = (Get-ItemProperty -Path $regU -Name "StartInTray" -ErrorAction SilentlyContinue).StartInTray
+                $chkStartInTray.Checked = ($null -eq $valTray -or [int]$valTray -ne 0)
+            } else {
+                $chkStartInTray.Checked = $true
+            }
+        } catch {
+            $chkStartInTray.Checked = $true
+        }
+
         # Whitelist & Blacklist
         $valWhite = Get-XmlKey "Whitelist"
         if ($valWhite) {
@@ -3275,6 +3332,13 @@ function Save-ConfigData {
 
         $blackListFormatted = ($txtBlacklist.Lines | ForEach-Object { $_.Trim() } | Where-Object { $_ }) -join ","
         Set-XmlKey "Blacklist" $blackListFormatted
+
+        try {
+            $regU = "HKCU:\SOFTWARE\IPBanControlCenter"
+            if (-not (Test-Path $regU)) { New-Item -Path $regU -Force | Out-Null }
+            $v = if ($chkStartInTray.Checked) { 1 } else { 0 }
+            Set-ItemProperty -Path $regU -Name "StartInTray" -Value $v -Force
+        } catch {}
 
         $xml.Save($configFile)
         $statusLabel.Text = "Налаштування успішно збережено у $configFile"
@@ -3996,12 +4060,31 @@ $tabControl.Add_SelectedIndexChanged({
     }
 })
 
-# Завантаження при відкритті форми
-$form.Add_Shown({
+# Ініціалізація компонентів та автоконтроль служби
+function Initialize-App {
     Load-GeoIPCache
     Update-UILanguage
     Update-HeaderLayout
     Init-Tray
+
+    # Автоматичний контроль служби:
+    # 1. Переконуємося, що служба налаштована на автоматичний запуск разом із Windows (start= auto)
+    # 2. Якщо після перезавантаження сервера служба вимкнена або зупинена - автоматично запускаємо її!
+    try {
+        $svc = Get-Service -Name $script:ServiceName -ErrorAction SilentlyContinue
+        if ($svc) {
+            $wmi = Get-CimInstance Win32_Service -Filter "Name='$($script:ServiceName)'" -ErrorAction SilentlyContinue
+            if ($wmi -and ($wmi.StartMode -ne 'Auto' -or $wmi.DelayedAuto)) {
+                & sc.exe config $script:ServiceName start= auto | Out-Null
+            }
+            if ($svc.Status -ne 'Running') {
+                Start-Service -Name $script:ServiceName -ErrorAction SilentlyContinue
+                & sc.exe failure $script:ServiceName reset= 86400 actions= restart/60000/restart/60000/restart/60000 | Out-Null
+                Start-Sleep -Milliseconds 600
+            }
+        }
+    } catch {}
+
     Update-ServiceUI
     Refresh-BannedIPs
     Load-ConfigData
@@ -4014,10 +4097,16 @@ $form.Add_Shown({
         $script:GeoIPTimer.Add_Tick({ Resolve-NextPendingGeoIP })
         $script:GeoIPTimer.Start()
     }
+}
 
-    # Якщо служба IPBan не встановлена - відкриваємо майстер налаштувань
+$form.Add_Shown({
+    Update-HeaderLayout
+    Update-ServiceUI
+    Refresh-BannedIPs
+
+    # Якщо служба IPBan не встановлена - відкриваємо майстер налаштувань (лише якщо вікно явно відкрите)
     $svcStatus = Get-IPBanServiceStatus
-    if ($svcStatus -eq "NotInstalled") {
+    if ($svcStatus -eq "NotInstalled" -and -not $script:StartInTray) {
         $tabControl.SelectedTab = $tabSetup
         $msg = T "PromptInstallText"
         $title = T "PromptInstallTitle"
@@ -4041,7 +4130,7 @@ $form.Add_FormClosing({
         $e.Cancel = $true
         $form.Hide()
         if ($script:TrayIcon) {
-            $script:TrayIcon.ShowBalloonTip(2000, "IPBan Control Center", "Програму згорнуто у системний трей. Клікніть двічі для відновлення.", [System.Windows.Forms.ToolTipIcon]::Info)
+            $script:TrayIcon.ShowBalloonTip(2000, "IPBan Control Center", "Програму згорнуто у системний трей. Клікніть значок для відновлення.", [System.Windows.Forms.ToolTipIcon]::Info)
         }
     } else {
         if ($script:GeoIPTimer) {
@@ -4065,10 +4154,34 @@ $form.Add_FormClosing({
             $script:TrayIcon.Visible = $false
             $script:TrayIcon.Dispose()
         }
+        if ($script:AppContext) {
+            $script:AppContext.ExitThread()
+        }
+        [System.Windows.Forms.Application]::Exit()
     }
 })
 
 # ------------------------------------------------------------------------------
 # Запуск
 # ------------------------------------------------------------------------------
-[System.Windows.Forms.Application]::Run($form)
+Initialize-App
+
+# Збереження WindowHandle для активації форми при повторному запуску
+try {
+    $regU = "HKCU:\SOFTWARE\IPBanControlCenter"
+    if (-not (Test-Path $regU)) { New-Item -Path $regU -Force | Out-Null }
+    Set-ItemProperty -Path $regU -Name "WindowHandle" -Value $form.Handle.ToInt64() -Force
+} catch {}
+
+$script:AppContext = New-Object System.Windows.Forms.ApplicationContext
+
+if ($script:StartInTray) {
+    if ($script:TrayIcon) {
+        $tipMsg = if ($script:CurrentLang -eq "EN") { "IPBan Control Center is running in the background tray." } else { "IPBan Control Center працює у системному треї. Клікніть значок для відкриття." }
+        $script:TrayIcon.ShowBalloonTip(2000, "IPBan Control Center", $tipMsg, [System.Windows.Forms.ToolTipIcon]::Info)
+    }
+} else {
+    $form.Show()
+}
+
+[System.Windows.Forms.Application]::Run($script:AppContext)

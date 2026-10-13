@@ -989,7 +989,7 @@ $doneTitle = if ($uninstLang -eq "EN") { "Uninstall Complete" } else { "Вида
         if (-not (Test-Path $regPath)) { New-Item -Path $regPath -Force | Out-Null }
         Set-ItemProperty -Path $regPath -Name "DisplayName" -Value "IPBan Manager & Control Center"
         Set-ItemProperty -Path $regPath -Name "DisplayIcon" -Value "$targetExe,0"
-        Set-ItemProperty -Path $regPath -Name "DisplayVersion" -Value "2.1.3"
+        Set-ItemProperty -Path $regPath -Name "DisplayVersion" -Value "2.1.4"
         Set-ItemProperty -Path $regPath -Name "Publisher" -Value "IPBan Community & Tooling"
         Set-ItemProperty -Path $regPath -Name "InstallLocation" -Value $targetDir
         Set-ItemProperty -Path $regPath -Name "UninstallString" -Value "powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$uninstallerPs1`""
@@ -1060,8 +1060,8 @@ $doneTitle = if ($uninstLang -eq "EN") { "Uninstall Complete" } else { "Вида
             Log-Step "Налаштування автозавантаження Windows (тільки для поточного користувача)..."
             $runHkcu = "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Run"
             if (-not (Test-Path $runHkcu)) { New-Item -Path $runHkcu -Force | Out-Null }
-            Set-ItemProperty -Path $runHkcu -Name "IPBanControlCenter" -Value "`"$targetExe`"" -Force
-            Log-Step "  -> Додано в HKCU Run: $targetExe"
+            Set-ItemProperty -Path $runHkcu -Name "IPBanControlCenter" -Value "`"$targetExe`" -tray" -Force
+            Log-Step "  -> Додано в HKCU Run (режим трею): $targetExe -tray"
         }
 
         # 6. Служба IPBan
@@ -1070,7 +1070,16 @@ $doneTitle = if ($uninstLang -eq "EN") { "Uninstall Complete" } else { "Вида
             Log-Step "Перевірка наявності служби IPBan..."
             $ipbanSvc = Get-Service -Name "IPBan" -ErrorAction SilentlyContinue
             if ($ipbanSvc) {
-                Log-Step "  -> Службу IPBan знайдено (Статус: $($ipbanSvc.Status))"
+                Log-Step "  -> Службу IPBan знайдено. Налаштування автоматичного запуску (Automatic)..."
+                try {
+                    Set-Service -Name "IPBan" -StartupType Automatic -ErrorAction SilentlyContinue
+                    & sc.exe config "IPBan" start= auto | Out-Null
+                    & sc.exe failure "IPBan" reset= 86400 actions= restart/60000/restart/60000/restart/60000 | Out-Null
+                    Start-Service -Name "IPBan" -ErrorAction SilentlyContinue
+                    Log-Step "  -> Службу IPBan успішно налаштовано та запущено в режимі Automatic"
+                } catch {
+                    Log-Step "  -> Попередження: $($_.Exception.Message)"
+                }
             } else {
                 Log-Step "  -> Службу IPBan не виявлено (її можна встановити з програми у вкладці «Служба IPBan»)"
             }
@@ -1085,12 +1094,13 @@ $doneTitle = if ($uninstLang -eq "EN") { "Uninstall Complete" } else { "Вида
             Log-Step "  -> Аудит Logon/Logoff успішно активовано"
         }
 
-        # 8. Збереження налаштування мови в реєстр HKCU
+        # 8. Збереження налаштувань у реєстр HKCU
         try {
             $regUser = "HKCU:\SOFTWARE\IPBanControlCenter"
             if (-not (Test-Path $regUser)) { New-Item -Path $regUser -Force | Out-Null }
             Set-ItemProperty -Path $regUser -Name "Language" -Value $script:CurrentLang -Force
-            Log-Step "  -> Налаштування мови ($($script:CurrentLang)) збережено в реєстр"
+            Set-ItemProperty -Path $regUser -Name "StartInTray" -Value 1 -Force
+            Log-Step "  -> Налаштування мови ($($script:CurrentLang)) та трею збережено в реєстр"
         } catch {}
 
         $pbInstall.Value = 100

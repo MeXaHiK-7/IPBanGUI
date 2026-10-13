@@ -96,11 +96,18 @@ using System;
 using System.Diagnostics;
 using System.IO;
 using System.IO.Compression;
+using System.Runtime.InteropServices;
 using System.Security.Principal;
 using System.Windows.Forms;
 
 namespace IPBanControlCenter {
     class Program {
+        [DllImport("user32.dll")]
+        public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+
+        [DllImport("user32.dll")]
+        public static extern bool SetForegroundWindow(IntPtr hWnd);
+
         // Вбудований пакет IPBanGUI.ps1 + app.ico
         private static readonly string EmbeddedPayload = "$launcherPayload";
 
@@ -109,6 +116,21 @@ namespace IPBanControlCenter {
             bool createdNew = false;
             using (var mutex = new System.Threading.Mutex(true, "Local\\IPBanControlCenter_Exe_SingleInstance", out createdNew)) {
                 if (!createdNew) {
+                    try {
+                        using (var rk = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(@"SOFTWARE\IPBanControlCenter", false)) {
+                            if (rk != null) {
+                                object val = rk.GetValue("WindowHandle");
+                                if (val != null) {
+                                    long hLong = Convert.ToInt64(val);
+                                    if (hLong != 0) {
+                                        IntPtr hWnd = new IntPtr(hLong);
+                                        ShowWindow(hWnd, 9); // SW_RESTORE
+                                        SetForegroundWindow(hWnd);
+                                    }
+                                }
+                            }
+                        }
+                    } catch {}
                     return;
                 }
                 try {
@@ -332,7 +354,7 @@ if ($cr2.Errors.Count -eq 0) {
     Copy-Item $launcherExe -Destination (Join-Path $relDir "IPBanControlCenter.exe") -Force
     Copy-Item $setupExe -Destination (Join-Path $relDir "Setup_IPBanGUI.exe") -Force
 
-    $zipPath = Join-Path $relDir "IPBanGUI-v2.1.3.zip"
+    $zipPath = Join-Path $relDir "IPBanGUI-v2.1.4.zip"
     if (Test-Path $zipPath) { Remove-Item $zipPath -Force }
     Add-Type -AssemblyName System.IO.Compression.FileSystem
     $tempZipDir = Join-Path $env:TEMP ("zip_" + [Guid]::NewGuid().ToString("N"))
