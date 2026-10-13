@@ -48,7 +48,7 @@ try {
 # ------------------------------------------------------------------------------
 # Глобальні змінні та стан
 # ------------------------------------------------------------------------------
-$script:AppVersion = "v2.1.2"
+$script:AppVersion = "v2.1.3"
 $script:DefaultInstallPath = "C:\Program Files\IPBan"
 $script:CurrentInstallPath = $script:DefaultInstallPath
 $script:ServiceName = "IPBan"
@@ -746,6 +746,10 @@ function Get-FirewallBannedIPs {
         $fw = New-Object -ComObject HNetCfg.FwPolicy2
         foreach ($rule in $fw.Rules) {
             if ($rule.Name -like "IPBan*") {
+                # Якщо правило блокування IPBan було вимкнено - автоматично відновлюємо активність
+                if (-not $rule.Enabled -and $rule.Action -eq 0 -and $rule.Name -notlike "*Whitelist*") {
+                    try { $rule.Enabled = $true } catch {}
+                }
                 # Вимкнені правила не блокують трафік і не повинні показуватися як активні блокування
                 if (-not $rule.Enabled) { continue }
 
@@ -784,6 +788,9 @@ function Get-FirewallBannedIPs {
         try {
             $rules = Get-NetFirewallRule -Name "IPBan*" -ErrorAction SilentlyContinue
             foreach ($r in $rules) {
+                if (-not $r.Enabled -and $r.Action -eq "Block" -and $r.Name -notlike "*Whitelist*") {
+                    try { Enable-NetFirewallRule -Name $r.Name -ErrorAction SilentlyContinue } catch {}
+                }
                 if (-not $r.Enabled) { continue }
                 $filters = Get-NetFirewallAddressFilter -AssociatedNetFirewallRule $r -ErrorAction SilentlyContinue
                 foreach ($f in $filters) {
@@ -1143,9 +1150,10 @@ function Unban-IPAddress {
                     }
                     if ($remaining.Count -eq 0) {
                         $rule.RemoteAddresses = "255.255.255.255"
-                        $rule.Enabled = $false
+                        $rule.Enabled = $true
                     } else {
                         $rule.RemoteAddresses = ($remaining -join ",")
+                        $rule.Enabled = $true
                     }
                     $success = $true
                 }
@@ -3505,14 +3513,14 @@ $btnUnbanAll.Add_Click({
             foreach ($rule in $fw.Rules) {
                 if ($rule.Name -like "IPBan*" -and $rule.Name -notlike "*Whitelist*" -and $rule.Action -eq 0) {
                     $rule.RemoteAddresses = "255.255.255.255"
-                    $rule.Enabled = $false
+                    $rule.Enabled = $true
                 }
             }
             try {
                 $manualRule = $fw.Rules | Where-Object { $_.Name -eq "IPBan_Manual_Block" } | Select-Object -First 1
                 if ($manualRule) {
                     $manualRule.RemoteAddresses = "255.255.255.255"
-                    $manualRule.Enabled = $false
+                    $manualRule.Enabled = $true
                 }
             } catch {}
 

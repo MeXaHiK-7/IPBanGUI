@@ -332,7 +332,7 @@ if ($cr2.Errors.Count -eq 0) {
     Copy-Item $launcherExe -Destination (Join-Path $relDir "IPBanControlCenter.exe") -Force
     Copy-Item $setupExe -Destination (Join-Path $relDir "Setup_IPBanGUI.exe") -Force
 
-    $zipPath = Join-Path $relDir "IPBanGUI-v2.1.2.zip"
+    $zipPath = Join-Path $relDir "IPBanGUI-v2.1.3.zip"
     if (Test-Path $zipPath) { Remove-Item $zipPath -Force }
     Add-Type -AssemblyName System.IO.Compression.FileSystem
     $tempZipDir = Join-Path $env:TEMP ("zip_" + [Guid]::NewGuid().ToString("N"))
