@@ -67,7 +67,7 @@ try {
 # ------------------------------------------------------------------------------
 # Глобальні змінні та стан
 # ------------------------------------------------------------------------------
-$script:AppVersion = "v2.1.4"
+$script:AppVersion = "v2.2.0"
 $script:DefaultInstallPath = "C:\Program Files\IPBan"
 $script:CurrentInstallPath = $script:DefaultInstallPath
 $script:ServiceName = "IPBan"
@@ -97,6 +97,31 @@ $script:TrayMonitorTimer = $null
 $script:IsExiting = $false
 $script:ManualBanTimes = @{}
 $script:CurrentBanTimeSetting = "01:00:00:00"
+$script:ReportedAbuseIPs = New-Object 'System.Collections.Generic.HashSet[string]'
+
+function Send-AbuseIPDBReport([string]$ip, [string]$comment = "Brute-force attack detected by IPBan") {
+    try {
+        $regAbuse = "HKCU:\SOFTWARE\IPBanControlCenter\AbuseIPDB"
+        if (-not (Test-Path $regAbuse)) { return }
+        $p = Get-ItemProperty -Path $regAbuse -ErrorAction SilentlyContinue
+        if (-not $p -or [int]$p.AutoReport -ne 1 -or [string]::IsNullOrWhiteSpace($p.ApiKey)) { return }
+        if (-not $ip -or $script:ReportedAbuseIPs.Contains($ip)) { return }
+
+        [void]$script:ReportedAbuseIPs.Add($ip)
+
+        [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12 -bor [System.Net.SecurityProtocolType]::Tls13
+        $headers = @{
+            "Key" = $p.ApiKey.Trim()
+            "Accept" = "application/json"
+        }
+        $body = @{
+            ip = $ip
+            categories = "18,22" # 18: Brute-Force, 22: SSH/RDP/Server exploit
+            comment = $comment
+        }
+        Invoke-RestMethod -Uri "https://api.abuseipdb.com/api/v2/report" -Method Post -Headers $headers -Body $body -TimeoutSec 10 -ErrorAction SilentlyContinue | Out-Null
+    } catch {}
+}
 
 # Підтримка читання бази ipban.sqlite через вбудований у Windows winsqlite3.dll
 $script:HasWinSqlite = (Test-Path "$env:windir\System32\winsqlite3.dll")
@@ -248,6 +273,16 @@ $script:I18N = @{
         "ChkProcessInternal" = "Обробляти та блокувати внутрішні локальні IP-адреси (ProcessInternalIPAddresses)"
         "ChkResetUnbanned" = "Скидати лічильник після розблокування IP (ResetFailedLoginCountForUnbannedIPAddresses)"
         "ChkStartInTray" = "Запускати програму згорнутою у системний трей (Start in tray)"
+        "GbMonitoring" = "Моніторинг сервісів та протоколів (Event Viewer & Logs)"
+        "LblMonitoringDesc" = "Контроль та виявлення атак на сервіси Windows за конфігурацією IPBan:"
+        "StatusEnabled" = "Включено"
+        "StatusDisabledService" = "Вимкнено"
+        "GbAbuseIPDB" = "Хмарна база загроз AbuseIPDB (Threat Intelligence)"
+        "LblAbuseApiKey" = "API Ключ AbuseIPDB (Key):"
+        "LblAbuseConfidence" = "Поріг впевненості (Confidence Score, %):"
+        "LblAbuseLimit" = "Кількість IP для завантаження (Limit):"
+        "ChkAbuseAutoReport" = "Автоматично надсилати репорти про атаки в AbuseIPDB (за замовчуванням: ВИМКНЕНО)"
+        "BtnFetchAbuse" = "📥 Завантажити чорний список з AbuseIPDB"
         "BtnSaveConfig" = "Зберегти налаштування у файл"
         "BtnReloadConfig" = "Скинути до значень файлу"
         "BtnRestoreBak" = "Відновити з бекапу (.bak)"
@@ -377,6 +412,16 @@ $script:I18N = @{
         "ChkProcessInternal" = "Process and ban internal/local IP addresses (ProcessInternalIPAddresses)"
         "ChkResetUnbanned" = "Reset counter after unbanning an IP (ResetFailedLoginCountForUnbannedIPAddresses)"
         "ChkStartInTray" = "Start application minimized to system tray"
+        "GbMonitoring" = "Service & Protocol Monitoring (Event Viewer & Logs)"
+        "LblMonitoringDesc" = "Detection and attack prevention across Windows services per IPBan config:"
+        "StatusEnabled" = "Enabled"
+        "StatusDisabledService" = "Disabled"
+        "GbAbuseIPDB" = "AbuseIPDB Cloud Threat Intelligence"
+        "LblAbuseApiKey" = "AbuseIPDB API Key:"
+        "LblAbuseConfidence" = "Confidence Score (%):"
+        "LblAbuseLimit" = "Download IP Limit:"
+        "ChkAbuseAutoReport" = "Automatically report attack attempts to AbuseIPDB (Default: DISABLED)"
+        "BtnFetchAbuse" = "📥 Download Blacklist from AbuseIPDB"
         "BtnSaveConfig" = "Save Settings to File"
         "BtnReloadConfig" = "Reset to File Values"
         "BtnRestoreBak" = "Restore from Backup (.bak)"
@@ -2067,6 +2112,202 @@ $chkStartInTray.AutoSize = $true
 $chkStartInTray.Checked = $true
 $gbBehavior.Controls.Add($chkStartInTray)
 
+# ------------------------------------------------------------------------------
+# Група: Моніторинг сервісів та протоколів (Monitoring)
+# ------------------------------------------------------------------------------
+$gbMonitoring = New-Object System.Windows.Forms.GroupBox
+$gbMonitoring.Text = (T "GbMonitoring")
+$gbMonitoring.Font = New-Object System.Drawing.Font("Segoe UI", 9.5, [System.Drawing.FontStyle]::Bold)
+$gbMonitoring.Location = New-Object System.Drawing.Point(20, 445)
+$gbMonitoring.Size = New-Object System.Drawing.Size(990, 255)
+$scrollSettings.Controls.Add($gbMonitoring)
+
+$lblMonitoringDesc = New-Object System.Windows.Forms.Label
+$lblMonitoringDesc.Text = (T "LblMonitoringDesc")
+$lblMonitoringDesc.Font = New-Object System.Drawing.Font("Segoe UI", 8.5)
+$lblMonitoringDesc.ForeColor = [System.Drawing.Color]::FromArgb(100, 116, 139)
+$lblMonitoringDesc.Location = New-Object System.Drawing.Point(20, 25)
+$lblMonitoringDesc.AutoSize = $true
+$gbMonitoring.Controls.Add($lblMonitoringDesc)
+
+# Список контрольованих протоколів
+$script:MonitoredProtocols = @(
+    @{ Id = "RDP"; Name = "RDP (Remote Desktop)"; Def = $true; Port = "3389" },
+    @{ Id = "SSH"; Name = "OpenSSH"; Def = $false; Port = "22" },
+    @{ Id = "MSSQL"; Name = "MS-SQL Server"; Def = $false; Port = "1433" },
+    @{ Id = "MySQL"; Name = "MySQL / MariaDB"; Def = $false; Port = "3306" },
+    @{ Id = "FTP"; Name = "FTP (IIS / FileZilla)"; Def = $false; Port = "21" },
+    @{ Id = "HTTP"; Name = "HTTP / Web (IIS / Apache)"; Def = $false; Port = "80/443" },
+    @{ Id = "SMTP"; Name = "SMTP (Mail Server)"; Def = $false; Port = "25/587" },
+    @{ Id = "IMAP"; Name = "IMAP (Mail Server)"; Def = $false; Port = "143/993" },
+    @{ Id = "POP3"; Name = "POP3 (Mail Server)"; Def = $false; Port = "110/995" },
+    @{ Id = "RRAS"; Name = "MS VPN (RRAS)"; Def = $false; Port = "1723/4500" },
+    @{ Id = "RDWeb"; Name = "RD Web Access"; Def = $false; Port = "443" },
+    @{ Id = "VNC"; Name = "VNC (Remote Control)"; Def = $false; Port = "5900" }
+)
+
+$script:ProtocolControls = @{}
+
+$flpMonitoring = New-Object System.Windows.Forms.TableLayoutPanel
+$flpMonitoring.Location = New-Object System.Drawing.Point(20, 50)
+$flpMonitoring.Size = New-Object System.Drawing.Size(950, 190)
+$flpMonitoring.ColumnCount = 3
+$flpMonitoring.RowCount = 4
+for ($c = 0; $c -lt 3; $c++) {
+    $flpMonitoring.ColumnStyles.Add((New-Object System.Windows.Forms.ColumnStyle([System.Windows.Forms.SizeType]::Percent, 33.33)))
+}
+for ($r = 0; $r -lt 4; $r++) {
+    $flpMonitoring.RowStyles.Add((New-Object System.Windows.Forms.RowStyle([System.Windows.Forms.SizeType]::Absolute, 45)))
+}
+$gbMonitoring.Controls.Add($flpMonitoring)
+
+$pIdx = 0
+foreach ($proto in $script:MonitoredProtocols) {
+    $col = [int]($pIdx % 3)
+    $row = [int]($pIdx / 3)
+
+    $cardPanel = New-Object System.Windows.Forms.Panel
+    $cardPanel.Dock = [System.Windows.Forms.DockStyle]::Fill
+    $cardPanel.Padding = New-Object System.Windows.Forms.Padding(5)
+
+    $chkProto = New-Object System.Windows.Forms.CheckBox
+    $chkProto.Text = "$($proto.Name):"
+    $chkProto.Font = New-Object System.Drawing.Font("Segoe UI", 9, [System.Drawing.FontStyle]::Bold)
+    $chkProto.Location = New-Object System.Drawing.Point(5, 10)
+    $chkProto.Size = New-Object System.Drawing.Size(190, 24)
+    $chkProto.Checked = $proto.Def
+    $cardPanel.Controls.Add($chkProto)
+
+    $lblBadge = New-Object System.Windows.Forms.Label
+    $lblBadge.Location = New-Object System.Drawing.Point(200, 11)
+    $lblBadge.Size = New-Object System.Drawing.Size(95, 22)
+    $lblBadge.Font = New-Object System.Drawing.Font("Segoe UI", 8.5, [System.Drawing.FontStyle]::Bold)
+    $lblBadge.TextAlign = [System.Drawing.ContentAlignment]::MiddleCenter
+    $cardPanel.Controls.Add($lblBadge)
+
+    $updateBadge = {
+        param($chk, $badge)
+        if ($chk.Checked) {
+            $badge.Text = "🟢 " + (T "StatusEnabled")
+            $badge.ForeColor = [System.Drawing.Color]::FromArgb(22, 101, 52)
+            $badge.BackColor = [System.Drawing.Color]::FromArgb(220, 252, 231)
+        } else {
+            $badge.Text = "⚪ " + (T "StatusDisabledService")
+            $badge.ForeColor = [System.Drawing.Color]::FromArgb(100, 116, 139)
+            $badge.BackColor = [System.Drawing.Color]::FromArgb(241, 245, 249)
+        }
+    }
+    $chkProto.Add_CheckedChanged({ & $updateBadge $chkProto $lblBadge })
+    & $updateBadge $chkProto $lblBadge
+
+    $script:ProtocolControls[$proto.Id] = @{
+        CheckBox = $chkProto
+        Badge = $lblBadge
+    }
+
+    $flpMonitoring.Controls.Add($cardPanel, $col, $row)
+    $pIdx++
+}
+
+# ------------------------------------------------------------------------------
+# Група: Хмарна база AbuseIPDB (Threat Intelligence)
+# ------------------------------------------------------------------------------
+$gbAbuseIPDB = New-Object System.Windows.Forms.GroupBox
+$gbAbuseIPDB.Text = (T "GbAbuseIPDB")
+$gbAbuseIPDB.Font = New-Object System.Drawing.Font("Segoe UI", 9.5, [System.Drawing.FontStyle]::Bold)
+$gbAbuseIPDB.Location = New-Object System.Drawing.Point(20, 710)
+$gbAbuseIPDB.Size = New-Object System.Drawing.Size(990, 205)
+$scrollSettings.Controls.Add($gbAbuseIPDB)
+
+# 1. Рядок: API Key
+$lblAbuseApiKey = New-Object System.Windows.Forms.Label
+$lblAbuseApiKey.Text = (T "LblAbuseApiKey")
+$lblAbuseApiKey.Font = New-Object System.Drawing.Font("Segoe UI", 9)
+$lblAbuseApiKey.Location = New-Object System.Drawing.Point(20, 32)
+$lblAbuseApiKey.AutoSize = $true
+$gbAbuseIPDB.Controls.Add($lblAbuseApiKey)
+
+$txtAbuseApiKey = New-Object System.Windows.Forms.TextBox
+$txtAbuseApiKey.Font = New-Object System.Drawing.Font("Consolas", 9.5)
+$txtAbuseApiKey.Location = New-Object System.Drawing.Point(340, 29)
+$txtAbuseApiKey.Size = New-Object System.Drawing.Size(420, 24)
+$gbAbuseIPDB.Controls.Add($txtAbuseApiKey)
+
+$llGetAbuseKey = New-Object System.Windows.Forms.LinkLabel
+$llGetAbuseKey.Text = "Отримати безкоштовний ключ на abuseipdb.com"
+$llGetAbuseKey.Font = New-Object System.Drawing.Font("Segoe UI", 8.5)
+$llGetAbuseKey.Location = New-Object System.Drawing.Point(770, 33)
+$llGetAbuseKey.AutoSize = $true
+$llGetAbuseKey.Add_Click({
+    try { [System.Diagnostics.Process]::Start("https://www.abuseipdb.com/account/api") } catch {}
+})
+$gbAbuseIPDB.Controls.Add($llGetAbuseKey)
+
+# 2. Рядок: Confidence Score & Limit
+$lblAbuseConfidence = New-Object System.Windows.Forms.Label
+$lblAbuseConfidence.Text = (T "LblAbuseConfidence")
+$lblAbuseConfidence.Font = New-Object System.Drawing.Font("Segoe UI", 9)
+$lblAbuseConfidence.Location = New-Object System.Drawing.Point(20, 70)
+$lblAbuseConfidence.AutoSize = $true
+$gbAbuseIPDB.Controls.Add($lblAbuseConfidence)
+
+$numAbuseConfidence = New-Object System.Windows.Forms.NumericUpDown
+$numAbuseConfidence.Font = New-Object System.Drawing.Font("Segoe UI", 9)
+$numAbuseConfidence.Location = New-Object System.Drawing.Point(340, 68)
+$numAbuseConfidence.Size = New-Object System.Drawing.Size(85, 25)
+$numAbuseConfidence.Minimum = 25
+$numAbuseConfidence.Maximum = 100
+$numAbuseConfidence.Value = 100
+$gbAbuseIPDB.Controls.Add($numAbuseConfidence)
+
+$lblAbuseLimit = New-Object System.Windows.Forms.Label
+$lblAbuseLimit.Text = (T "LblAbuseLimit")
+$lblAbuseLimit.Font = New-Object System.Drawing.Font("Segoe UI", 9)
+$lblAbuseLimit.Location = New-Object System.Drawing.Point(460, 70)
+$lblAbuseLimit.AutoSize = $true
+$gbAbuseIPDB.Controls.Add($lblAbuseLimit)
+
+$numAbuseLimit = New-Object System.Windows.Forms.NumericUpDown
+$numAbuseLimit.Font = New-Object System.Drawing.Font("Segoe UI", 9)
+$numAbuseLimit.Location = New-Object System.Drawing.Point(670, 68)
+$numAbuseLimit.Size = New-Object System.Drawing.Size(90, 25)
+$numAbuseLimit.Minimum = 50
+$numAbuseLimit.Maximum = 10000
+$numAbuseLimit.Increment = 100
+$numAbuseLimit.Value = 1000
+$gbAbuseIPDB.Controls.Add($numAbuseLimit)
+
+# 3. Рядок: Авто-репорт опція (вимкнена за замовчуванням)
+$chkAbuseAutoReport = New-Object System.Windows.Forms.CheckBox
+$chkAbuseAutoReport.Text = (T "ChkAbuseAutoReport")
+$chkAbuseAutoReport.Font = New-Object System.Drawing.Font("Segoe UI", 9)
+$chkAbuseAutoReport.ForeColor = [System.Drawing.Color]::FromArgb(185, 28, 28)
+$chkAbuseAutoReport.Location = New-Object System.Drawing.Point(20, 108)
+$chkAbuseAutoReport.AutoSize = $true
+$chkAbuseAutoReport.Checked = $false
+$gbAbuseIPDB.Controls.Add($chkAbuseAutoReport)
+
+# 4. Рядок: Кнопка завантаження бази зараз
+$btnFetchAbuse = New-Object System.Windows.Forms.Button
+$btnFetchAbuse.Text = (T "BtnFetchAbuse")
+$btnFetchAbuse.Font = New-Object System.Drawing.Font("Segoe UI", 9, [System.Drawing.FontStyle]::Bold)
+$btnFetchAbuse.BackColor = [System.Drawing.Color]::FromArgb(59, 130, 246)
+$btnFetchAbuse.ForeColor = [System.Drawing.Color]::White
+$btnFetchAbuse.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
+$btnFetchAbuse.FlatAppearance.BorderSize = 0
+$btnFetchAbuse.Location = New-Object System.Drawing.Point(20, 145)
+$btnFetchAbuse.Size = New-Object System.Drawing.Size(340, 36)
+$gbAbuseIPDB.Controls.Add($btnFetchAbuse)
+Set-SmoothButton $btnFetchAbuse 7
+
+$lblAbuseStatus = New-Object System.Windows.Forms.Label
+$lblAbuseStatus.Location = New-Object System.Drawing.Point(375, 154)
+$lblAbuseStatus.AutoSize = $true
+$lblAbuseStatus.Font = New-Object System.Drawing.Font("Segoe UI", 8.5)
+$lblAbuseStatus.ForeColor = [System.Drawing.Color]::FromArgb(100, 116, 139)
+$lblAbuseStatus.Text = "Готово до синхронізації"
+$gbAbuseIPDB.Controls.Add($lblAbuseStatus)
+
 # Панель кнопок збереження налаштувань
 $btnSaveConfig = New-Object System.Windows.Forms.Button
 $btnSaveConfig.Text = "Зберегти налаштування у файл"
@@ -2075,21 +2316,21 @@ $btnSaveConfig.BackColor = [System.Drawing.Color]::FromArgb(22, 163, 74)
 $btnSaveConfig.ForeColor = [System.Drawing.Color]::White
 $btnSaveConfig.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
 $btnSaveConfig.FlatAppearance.BorderSize = 0
-$btnSaveConfig.Location = New-Object System.Drawing.Point(20, 450)
+$btnSaveConfig.Location = New-Object System.Drawing.Point(20, 930)
 $btnSaveConfig.Size = New-Object System.Drawing.Size(260, 38)
 $scrollSettings.Controls.Add($btnSaveConfig)
 
 $btnReloadConfig = New-Object System.Windows.Forms.Button
 $btnReloadConfig.Text = "Скинути до значень файлу"
 $btnReloadConfig.Font = New-Object System.Drawing.Font("Segoe UI", 9)
-$btnReloadConfig.Location = New-Object System.Drawing.Point(290, 450)
+$btnReloadConfig.Location = New-Object System.Drawing.Point(290, 930)
 $btnReloadConfig.Size = New-Object System.Drawing.Size(210, 38)
 $scrollSettings.Controls.Add($btnReloadConfig)
 
 $btnRestoreBak = New-Object System.Windows.Forms.Button
 $btnRestoreBak.Text = "Відновити з бекапу (.bak)"
 $btnRestoreBak.Font = New-Object System.Drawing.Font("Segoe UI", 9)
-$btnRestoreBak.Location = New-Object System.Drawing.Point(510, 450)
+$btnRestoreBak.Location = New-Object System.Drawing.Point(510, 930)
 $btnRestoreBak.Size = New-Object System.Drawing.Size(210, 38)
 $scrollSettings.Controls.Add($btnRestoreBak)
 
@@ -2554,6 +2795,31 @@ function Update-UILanguage {
     $chkProcessInternal.Text = T "ChkProcessInternal"
     $chkResetUnbanned.Text = T "ChkResetUnbanned"
     if ($chkStartInTray) { $chkStartInTray.Text = T "ChkStartInTray" }
+
+    if ($gbMonitoring) {
+        $gbMonitoring.Text = T "GbMonitoring"
+        $lblMonitoringDesc.Text = T "LblMonitoringDesc"
+        foreach ($proto in $script:MonitoredProtocols) {
+            $ctl = $script:ProtocolControls[$proto.Id]
+            if ($ctl) {
+                if ($ctl.CheckBox.Checked) {
+                    $ctl.Badge.Text = "🟢 " + (T "StatusEnabled")
+                } else {
+                    $ctl.Badge.Text = "⚪ " + (T "StatusDisabledService")
+                }
+            }
+        }
+    }
+
+    if ($gbAbuseIPDB) {
+        $gbAbuseIPDB.Text = T "GbAbuseIPDB"
+        $lblAbuseApiKey.Text = T "LblAbuseApiKey"
+        $lblAbuseConfidence.Text = T "LblAbuseConfidence"
+        $lblAbuseLimit.Text = T "LblAbuseLimit"
+        $chkAbuseAutoReport.Text = T "ChkAbuseAutoReport"
+        $btnFetchAbuse.Text = T "BtnFetchAbuse"
+    }
+
     $btnSaveConfig.Text = T "BtnSaveConfig"
     $btnReloadConfig.Text = T "BtnReloadConfig"
     $btnRestoreBak.Text = T "BtnRestoreBak"
@@ -2744,6 +3010,13 @@ function Init-Tray {
                     Update-TrayIndicator
                 })
                 $script:AlertResetTimer.Start()
+
+                # Якщо ввімкнено авто-репорт в AbuseIPDB
+                try {
+                    $ips | Where-Object { $_.ActionType -eq "Block" -and $_.IPAddress -notlike "255.255.255.255*" } | ForEach-Object {
+                        Send-AbuseIPDBReport -ip $_.IPAddress
+                    }
+                } catch {}
             } else {
                 Update-TrayIndicator
             }
@@ -3262,6 +3535,38 @@ function Load-ConfigData {
             $txtBlacklist.Text = ""
         }
 
+        # AbuseIPDB налаштування
+        try {
+            $regAbuse = "HKCU:\SOFTWARE\IPBanControlCenter\AbuseIPDB"
+            if (Test-Path $regAbuse) {
+                $p = Get-ItemProperty -Path $regAbuse -ErrorAction SilentlyContinue
+                if ($p.ApiKey) { $txtAbuseApiKey.Text = $p.ApiKey }
+                if ($p.Confidence) { $numAbuseConfidence.Value = [int]$p.Confidence }
+                if ($p.Limit) { $numAbuseLimit.Value = [int]$p.Limit }
+                if ($null -ne $p.AutoReport) { $chkAbuseAutoReport.Checked = ([int]$p.AutoReport -eq 1) }
+            }
+        } catch {}
+
+        # Моніторинг сервісів: перевіряємо наявність правил у конфігурації
+        try {
+            $existingSources = @{}
+            $xml.SelectNodes("//ExpressionsToBlock//Group/Source") | ForEach-Object {
+                if ($_.InnerText) { $existingSources[$_.InnerText.Trim().ToUpper()] = $true }
+            }
+            $xml.SelectNodes("//LogFilesToParse//LogFile/Source") | ForEach-Object {
+                if ($_.InnerText) { $existingSources[$_.InnerText.Trim().ToUpper()] = $true }
+            }
+
+            foreach ($proto in $script:MonitoredProtocols) {
+                $ctl = $script:ProtocolControls[$proto.Id]
+                if ($ctl) {
+                    $pidUpper = $proto.Id.ToUpper()
+                    $hasConfig = ($existingSources.ContainsKey($pidUpper) -or ($pidUpper -eq "RDP"))
+                    $ctl.CheckBox.Checked = $hasConfig
+                }
+            }
+        } catch {}
+
         $statusLabel.Text = "Налаштування завантажено з $([System.IO.Path]::GetFileName($configFile))"
     } catch {
         [System.Windows.Forms.MessageBox]::Show("Помилка читання конфігурації: $_", "Помилка", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Error)
@@ -3338,6 +3643,145 @@ function Save-ConfigData {
             if (-not (Test-Path $regU)) { New-Item -Path $regU -Force | Out-Null }
             $v = if ($chkStartInTray.Checked) { 1 } else { 0 }
             Set-ItemProperty -Path $regU -Name "StartInTray" -Value $v -Force
+
+            $regAbuse = "HKCU:\SOFTWARE\IPBanControlCenter\AbuseIPDB"
+            if (-not (Test-Path $regAbuse)) { New-Item -Path $regAbuse -Force | Out-Null }
+            Set-ItemProperty -Path $regAbuse -Name "ApiKey" -Value $txtAbuseApiKey.Text.Trim() -Force
+            Set-ItemProperty -Path $regAbuse -Name "Confidence" -Value ([int]$numAbuseConfidence.Value) -Force
+            Set-ItemProperty -Path $regAbuse -Name "Limit" -Value ([int]$numAbuseLimit.Value) -Force
+            Set-ItemProperty -Path $regAbuse -Name "AutoReport" -Value (if ($chkAbuseAutoReport.Checked) { 1 } else { 0 }) -Force
+        } catch {}
+
+        # Оновлення моніторингу сервісів у конфігурації
+        try {
+            $expNode = $xml.SelectSingleNode("//ExpressionsToBlock/Groups")
+            if ($null -eq $expNode) {
+                $expRoot = $xml.SelectSingleNode("//ExpressionsToBlock")
+                if ($null -eq $expRoot) {
+                    $expRoot = $xml.configuration.AppendChild($xml.CreateElement("ExpressionsToBlock"))
+                }
+                $expNode = $expRoot.AppendChild($xml.CreateElement("Groups"))
+            }
+
+            # Шаблони правил для сервісів
+            $protoTemplates = @{
+                "MSSQL" = @'
+<Group>
+  <Source>MSSQL</Source>
+  <Keywords>0x90000000000000</Keywords>
+  <Path>Application</Path>
+  <FailedLoginThreshold>0</FailedLoginThreshold>
+  <Expressions>
+    <Expression>
+      <XPath>//Provider[contains(@Name,'MSSQL')]</XPath>
+      <Regex></Regex>
+    </Expression>
+    <Expression>
+      <XPath>//EventID</XPath>
+      <Regex><![CDATA[^(?<log>18456)$]]></Regex>
+    </Expression>
+    <Expression>
+      <XPath>(//Data)[1]</XPath>
+      <Regex><![CDATA[^(\s+)?(?<username>.+)$]]></Regex>
+    </Expression>
+    <Expression>
+      <XPath>(//Data)[3]</XPath>
+      <Regex><![CDATA[\[CLIENTE?\s?:\s?(?<ipaddress>[^\]]+)\]]]></Regex>
+    </Expression>
+  </Expressions>
+</Group>
+'@
+                "MySQL" = @'
+<Group>
+  <Source>MySQL</Source>
+  <Keywords>0x80000000000000</Keywords>
+  <Path>Application</Path>
+  <FailedLoginThreshold>0</FailedLoginThreshold>
+  <Expressions>
+    <Expression>
+      <XPath>//Provider[@Name='MySQL' or @Name='MariaDB']</XPath>
+      <Regex></Regex>
+    </Expression>
+    <Expression>
+      <XPath>//Data</XPath>
+      <Regex><![CDATA[(?<log>Access denied for user) '?(?<username>[^']+)'@'?(?<ipaddress>[^']+)']]></Regex>
+    </Expression>
+  </Expressions>
+</Group>
+'@
+                "SSH" = @'
+<Group>
+  <Source>SSH</Source>
+  <Keywords>0x4000000000000000</Keywords>
+  <Path>OpenSSH/Operational</Path>
+  <FailedLoginThreshold>0</FailedLoginThreshold>
+  <Expressions>
+    <Expression>
+      <XPath>//Data[@Name='payload']</XPath>
+      <Regex><![CDATA[(?<log>failed\s+password)\s+for\s+(invalid\s+user\s+)?(?<username>[^\s]+)\s+from\s+(?<ipaddress>[^\s]+)]]></Regex>
+    </Expression>
+  </Expressions>
+</Group>
+'@
+                "VNC" = @'
+<Group>
+  <Source>VNC</Source>
+  <Keywords>0x80000000000000</Keywords>
+  <Path>Application</Path>
+  <FailedLoginThreshold>0</FailedLoginThreshold>
+  <Expressions>
+    <Expression>
+      <XPath>//EventID</XPath>
+      <Regex>^258$</Regex>
+    </Expression>
+    <Expression>
+      <XPath>//Data</XPath>
+      <Regex><![CDATA[(?<log>Authentication\sfailed)\sfrom\s+(?<ipaddress>[0-9a-fA-F\.:]+)]]></Regex>
+    </Expression>
+  </Expressions>
+</Group>
+'@
+                "RRAS" = @'
+<Group>
+  <Source>RRAS</Source>
+  <Keywords>0x80000000000000</Keywords>
+  <Path>System</Path>
+  <FailedLoginThreshold>0</FailedLoginThreshold>
+  <Expressions>
+    <Expression>
+      <XPath>//EventID</XPath>
+      <Regex>^20271$</Regex>
+    </Expression>
+    <Expression>
+      <XPath>(//Data)[2]</XPath>
+      <Regex><![CDATA[(?<username>.*)]]></Regex>
+    </Expression>
+    <Expression>
+      <XPath>(//Data)[3]</XPath>
+      <Regex><![CDATA[(?<ipaddress>.+)]]></Regex>
+    </Expression>
+  </Expressions>
+</Group>
+'@
+            }
+
+            foreach ($pKey in $protoTemplates.Keys) {
+                $ctl = $script:ProtocolControls[$pKey]
+                if ($ctl) {
+                    $existingGroup = $xml.SelectSingleNode("//ExpressionsToBlock//Group[Source='$pKey']")
+                    if ($ctl.CheckBox.Checked) {
+                        if ($null -eq $existingGroup) {
+                            $frag = $xml.CreateDocumentFragment()
+                            $frag.InnerXml = $protoTemplates[$pKey]
+                            $expNode.AppendChild($frag) | Out-Null
+                        }
+                    } else {
+                        if ($null -ne $existingGroup) {
+                            $existingGroup.ParentNode.RemoveChild($existingGroup) | Out-Null
+                        }
+                    }
+                }
+            }
         } catch {}
 
         $xml.Save($configFile)
@@ -3668,6 +4112,74 @@ $cbBanTimePreset.Add_SelectedIndexChanged({
 
 $btnSaveConfig.Add_Click({ Save-ConfigData })
 $btnReloadConfig.Add_Click({ Load-ConfigData })
+
+$btnFetchAbuse.Add_Click({
+    $apiKey = $txtAbuseApiKey.Text.Trim()
+    if (-not $apiKey) {
+        [System.Windows.Forms.MessageBox]::Show("Введіть API Ключ AbuseIPDB для завантаження бази.`nКлюч можна отримати безкоштовно на https://www.abuseipdb.com/account/api", "Потрібен API Ключ", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Warning)
+        return
+    }
+
+    $btnFetchAbuse.Enabled = $false
+    $lblAbuseStatus.Text = "⏳ Завантаження чорного списку з AbuseIPDB..."
+    [System.Windows.Forms.Application]::DoEvents()
+
+    try {
+        [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12 -bor [System.Net.SecurityProtocolType]::Tls13
+        $conf = [int]$numAbuseConfidence.Value
+        $limit = [int]$numAbuseLimit.Value
+        $apiUrl = "https://api.abuseipdb.com/api/v2/blacklist?confidenceMinimum=$conf&limit=$limit&plaintext=true"
+
+        $headers = @{
+            "Key" = $apiKey
+            "Accept" = "text/plain"
+        }
+
+        $res = Invoke-RestMethod -Uri $apiUrl -Headers $headers -Method Get -TimeoutSec 30
+        $lines = @($res -split "`r?`n" | ForEach-Object { $_.Trim() } | Where-Object { $_ -match '^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$' })
+
+        if ($lines.Count -gt 0) {
+            # Додаємо отримані IP до поля Blacklist на вкладці Списків
+            $currentBlack = @($txtBlacklist.Lines | ForEach-Object { $_.Trim() } | Where-Object { $_ })
+            $blackSet = New-Object 'System.Collections.Generic.HashSet[string]'
+            foreach ($ip in $currentBlack) { [void]$blackSet.Add($ip) }
+
+            $newCount = 0
+            foreach ($ip in $lines) {
+                if ($blackSet.Add($ip)) {
+                    $newCount++
+                }
+            }
+
+            $txtBlacklist.Text = ($blackSet -join "`r`n")
+            $lblAbuseStatus.Text = "✅ Отримано: $($lines.Count) IP (Нових додано: $newCount)"
+            $statusLabel.Text = "AbuseIPDB: Завантажено $($lines.Count) шкідливих IP-адрес"
+
+            # Зберігаємо оновлений API ключ та налаштування
+            try {
+                $regAbuse = "HKCU:\SOFTWARE\IPBanControlCenter\AbuseIPDB"
+                if (-not (Test-Path $regAbuse)) { New-Item -Path $regAbuse -Force | Out-Null }
+                Set-ItemProperty -Path $regAbuse -Name "ApiKey" -Value $apiKey -Force
+                Set-ItemProperty -Path $regAbuse -Name "Confidence" -Value $conf -Force
+                Set-ItemProperty -Path $regAbuse -Name "Limit" -Value $limit -Force
+            } catch {}
+
+            $msg = "Успішно завантажено $($lines.Count) активних шкідливих IP-адрес із AbuseIPDB (Confidence: $conf%+)`n`nНових адрес додано у Чорний список: $newCount.`n`nБажаєте зберегти оновлений чорний список у конфігурацію та застосувати блокування зараз?"
+            $ans = [System.Windows.Forms.MessageBox]::Show($msg, "AbuseIPDB Синхронізація", [System.Windows.Forms.MessageBoxButtons]::YesNo, [System.Windows.Forms.MessageBoxIcon]::Information)
+            if ($ans -eq [System.Windows.Forms.DialogResult]::Yes) {
+                Save-ConfigData
+            }
+        } else {
+            $lblAbuseStatus.Text = "⚠️ Відповідь не містить IP-адрес"
+            [System.Windows.Forms.MessageBox]::Show("Сервер AbuseIPDB повернув порожній список. Перевірте ключ або налаштування.", "Увага", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Warning)
+        }
+    } catch {
+        $lblAbuseStatus.Text = "❌ Помилка запиту"
+        [System.Windows.Forms.MessageBox]::Show("Помилка звернення до API AbuseIPDB:`n$($_.Exception.Message)", "Помилка API", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Error)
+    } finally {
+        $btnFetchAbuse.Enabled = $true
+    }
+})
 
 $btnRestoreBak.Add_Click({
     $cfg = Get-IPBanConfigFile
