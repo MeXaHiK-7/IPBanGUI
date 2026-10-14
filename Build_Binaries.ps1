@@ -90,9 +90,9 @@ Write-Host "✅ Створено іконку: $icoPath" -ForegroundColor Green
 
 # ------------------------------------------------------------------------------
 # 2. Компіляція автономного IPBanControlCenter.exe
-#    (Містить вбудований скрипт IPBanGUI.ps1 та іконку app.ico)
+#    (Містить вбудований скрипт IPBanGUI.ps1, іконку app.ico та settings.json)
 # ------------------------------------------------------------------------------
-$launcherPayload = New-GZipPackage @("IPBanGUI.ps1", "app.ico") $scriptDir
+$launcherPayload = New-GZipPackage @("IPBanGUI.ps1", "app.ico", "settings.json") $scriptDir
 
 $csharpLauncher = @"
 using System;
@@ -267,6 +267,7 @@ $setupPayload = New-GZipPackage @(
     "IPBanGUI.ps1",
     "IPBanControlCenter.exe",
     "app.ico",
+    "settings.json",
     "README_IPBan_GUI.md",
     "Run_IPBan_GUI.bat"
 ) $scriptDir

@@ -2227,6 +2227,9 @@ foreach ($proto in $script:MonitoredProtocols) {
     $bRef = $lblBadge
     $handler = {
         & $updateBadge $cRef $bRef
+        if (Get-Command Save-PersistentAppSettings -ErrorAction SilentlyContinue) {
+            Save-PersistentAppSettings
+        }
     }.GetNewClosure()
     $chkProto.Add_CheckedChanged($handler)
     & $updateBadge $chkProto $lblBadge
@@ -3519,7 +3522,180 @@ function Update-StatsUI {
     }
 }
 
+$script:IsLoadingSettings = $false
+
+function Save-PersistentAppSettings {
+    if ($script:IsLoadingSettings) { return }
+    try {
+        $settingsDir = Join-Path $env:ProgramData "IPBanControlCenter"
+        if (-not (Test-Path $settingsDir)) {
+            New-Item -ItemType Directory -Path $settingsDir -Force | Out-Null
+        }
+        $settingsFile = Join-Path $settingsDir "settings.json"
+
+        # Формуємо об'єкт протоколів
+        $protoHash = [ordered]@{}
+        if ($script:ProtocolControls) {
+            foreach ($proto in $script:MonitoredProtocols) {
+                $ctl = $script:ProtocolControls[$proto.Id]
+                if ($ctl -and $ctl.CheckBox) {
+                    $protoHash[$proto.Id] = [bool]$ctl.CheckBox.Checked
+                }
+            }
+        }
+
+        $apiKeyVal = if ($txtAbuseApiKey) { $txtAbuseApiKey.Text.Trim() } else { "" }
+        $confVal = if ($numAbuseConfidence) { [int]$numAbuseConfidence.Value } else { 100 }
+        $limVal = if ($numAbuseLimit) { [int]$numAbuseLimit.Value } else { 1000 }
+        $autoVal = if ($chkAbuseAutoReport) { [bool]$chkAbuseAutoReport.Checked } else { $false }
+        $trayVal = if ($chkStartInTray) { [bool]$chkStartInTray.Checked } else { $true }
+        $pathVal = if ($txtInstallPath) { $txtInstallPath.Text.Trim() } else { "C:\Program Files\IPBan" }
+
+        $settingsData = [ordered]@{
+            "AbuseIPDB" = [ordered]@{
+                "ApiKey" = $apiKeyVal
+                "Confidence" = $confVal
+                "Limit" = $limVal
+                "AutoReport" = $autoVal
+            }
+            "Protocols" = $protoHash
+            "General" = [ordered]@{
+                "Language" = $script:CurrentLang
+                "StartInTray" = $trayVal
+                "IPBanPath" = $pathVal
+            }
+        }
+
+        # 1. Зберігаємо у ProgramData JSON
+        $json = $settingsData | ConvertTo-Json -Depth 4
+        $utf8WithBom = New-Object System.Text.UTF8Encoding($true)
+        [System.IO.File]::WriteAllText($settingsFile, $json, $utf8WithBom)
+
+        # 2. Зберігаємо у реєстр HKCU та HKLM
+        foreach ($root in @("HKCU:\SOFTWARE\IPBanControlCenter", "HKLM:\SOFTWARE\IPBanControlCenter")) {
+            try {
+                if (-not (Test-Path $root)) { New-Item -Path $root -Force | Out-Null }
+                Set-ItemProperty -Path $root -Name "Language" -Value $script:CurrentLang -Force
+                Set-ItemProperty -Path $root -Name "StartInTray" -Value (if ($trayVal) { 1 } else { 0 }) -Force
+                Set-ItemProperty -Path $root -Name "IPBanPath" -Value $pathVal -Force
+
+                $regAbuse = "$root\AbuseIPDB"
+                if (-not (Test-Path $regAbuse)) { New-Item -Path $regAbuse -Force | Out-Null }
+                Set-ItemProperty -Path $regAbuse -Name "ApiKey" -Value $apiKeyVal -Force
+                Set-ItemProperty -Path $regAbuse -Name "Confidence" -Value $confVal -Force
+                Set-ItemProperty -Path $regAbuse -Name "Limit" -Value $limVal -Force
+                Set-ItemProperty -Path $regAbuse -Name "AutoReport" -Value (if ($autoVal) { 1 } else { 0 }) -Force
+
+                $regProto = "$root\Protocols"
+                if (-not (Test-Path $regProto)) { New-Item -Path $regProto -Force | Out-Null }
+                foreach ($pKey in $protoHash.Keys) {
+                    Set-ItemProperty -Path $regProto -Name $pKey -Value (if ($protoHash[$pKey]) { 1 } else { 0 }) -Force
+                }
+            } catch {}
+        }
+    } catch {}
+}
+
+function Load-PersistentAppSettings {
+    $script:IsLoadingSettings = $true
+    try {
+        $settingsDir = Join-Path $env:ProgramData "IPBanControlCenter"
+        $settingsFile = Join-Path $settingsDir "settings.json"
+        $loadedData = $null
+
+        # 1. Спроба завантажити з ProgramData JSON
+        if (Test-Path $settingsFile) {
+            try {
+                $jsonRaw = Get-Content -Path $settingsFile -Raw -Encoding UTF8
+                $loadedData = $jsonRaw | ConvertFrom-Json
+            } catch {}
+        }
+
+        # 2. Реєстр як джерело/резерв
+        $regAbuse = "HKCU:\SOFTWARE\IPBanControlCenter\AbuseIPDB"
+        $regProto = "HKCU:\SOFTWARE\IPBanControlCenter\Protocols"
+        $regU = "HKCU:\SOFTWARE\IPBanControlCenter"
+
+        # AbuseIPDB
+        $apiKey = $null
+        $confidence = $null
+        $limit = $null
+        $autoReport = $null
+
+        if ($loadedData -and $loadedData.AbuseIPDB) {
+            $apiKey = $loadedData.AbuseIPDB.ApiKey
+            if ($null -ne $loadedData.AbuseIPDB.Confidence) { $confidence = [int]$loadedData.AbuseIPDB.Confidence }
+            if ($null -ne $loadedData.AbuseIPDB.Limit) { $limit = [int]$loadedData.AbuseIPDB.Limit }
+            if ($null -ne $loadedData.AbuseIPDB.AutoReport) { $autoReport = [bool]$loadedData.AbuseIPDB.AutoReport }
+        }
+        
+        if (-not $apiKey -and (Test-Path $regAbuse)) {
+            try {
+                $p = Get-ItemProperty -Path $regAbuse -ErrorAction SilentlyContinue
+                if ($p.ApiKey) { $apiKey = $p.ApiKey }
+                if ($null -ne $p.Confidence) { $confidence = [int]$p.Confidence }
+                if ($null -ne $p.Limit) { $limit = [int]$p.Limit }
+                if ($null -ne $p.AutoReport) { $autoReport = ([int]$p.AutoReport -eq 1) }
+            } catch {}
+        }
+
+        if ($apiKey -and $txtAbuseApiKey) { $txtAbuseApiKey.Text = $apiKey }
+        if ($null -ne $confidence -and $numAbuseConfidence) { $numAbuseConfidence.Value = [Math]::Max(1, [Math]::Min(100, $confidence)) }
+        if ($null -ne $limit -and $numAbuseLimit) { $numAbuseLimit.Value = [Math]::Max(50, [Math]::Min(10000, $limit)) }
+        if ($null -ne $autoReport -and $chkAbuseAutoReport) { $chkAbuseAutoReport.Checked = $autoReport }
+
+        # Протоколи моніторингу
+        $protoSettingsFound = $false
+        if ($loadedData -and $loadedData.Protocols) {
+            foreach ($proto in $script:MonitoredProtocols) {
+                $ctl = $script:ProtocolControls[$proto.Id]
+                if ($ctl -and $ctl.CheckBox) {
+                    $pVal = $loadedData.Protocols.$($proto.Id)
+                    if ($null -ne $pVal) {
+                        $ctl.CheckBox.Checked = [bool]$pVal
+                        $protoSettingsFound = $true
+                    }
+                }
+            }
+        }
+        
+        if (-not $protoSettingsFound -and (Test-Path $regProto)) {
+            try {
+                $pProps = Get-ItemProperty -Path $regProto -ErrorAction SilentlyContinue
+                foreach ($proto in $script:MonitoredProtocols) {
+                    $ctl = $script:ProtocolControls[$proto.Id]
+                    if ($ctl -and $ctl.CheckBox) {
+                        $pVal = $pProps.$($proto.Id)
+                        if ($null -ne $pVal) {
+                            $ctl.CheckBox.Checked = ([int]$pVal -ne 0)
+                        }
+                    }
+                }
+            } catch {}
+        }
+
+        # Загальні налаштування
+        if ($loadedData -and $loadedData.General) {
+            if ($null -ne $loadedData.General.StartInTray -and $chkStartInTray) {
+                $chkStartInTray.Checked = [bool]$loadedData.General.StartInTray
+            }
+        } elseif (Test-Path $regU) {
+            try {
+                $vTray = (Get-ItemProperty -Path $regU -Name "StartInTray" -ErrorAction SilentlyContinue).StartInTray
+                if ($null -ne $vTray -and $chkStartInTray) {
+                    $chkStartInTray.Checked = ([int]$vTray -ne 0)
+                }
+            } catch {}
+        }
+    } finally {
+        $script:IsLoadingSettings = $false
+    }
+}
+
 function Load-ConfigData {
+    # 1. Завжди завантажуємо збережені налаштування користувача (AbuseIPDB, протоколи, трей)
+    Load-PersistentAppSettings
+
     $configFile = Get-IPBanConfigFile
     if (-not (Test-Path $configFile)) {
         $statusLabel.Text = "Файл конфігурації не знайдено: $configFile"
@@ -3601,37 +3777,43 @@ function Load-ConfigData {
             $txtBlacklist.Text = ""
         }
 
-        # AbuseIPDB налаштування
-        try {
-            $regAbuse = "HKCU:\SOFTWARE\IPBanControlCenter\AbuseIPDB"
-            if (Test-Path $regAbuse) {
-                $p = Get-ItemProperty -Path $regAbuse -ErrorAction SilentlyContinue
-                if ($p.ApiKey) { $txtAbuseApiKey.Text = $p.ApiKey }
-                if ($p.Confidence) { $numAbuseConfidence.Value = [int]$p.Confidence }
-                if ($p.Limit) { $numAbuseLimit.Value = [int]$p.Limit }
-                if ($null -ne $p.AutoReport) { $chkAbuseAutoReport.Checked = ([int]$p.AutoReport -eq 1) }
-            }
-        } catch {}
-
-        # Моніторинг сервісів: перевіряємо наявність правил у конфігурації
-        try {
-            $existingSources = @{}
-            $xml.SelectNodes("//ExpressionsToBlock//Group/Source") | ForEach-Object {
-                if ($_.InnerText) { $existingSources[$_.InnerText.Trim().ToUpper()] = $true }
-            }
-            $xml.SelectNodes("//LogFilesToParse//LogFile/Source") | ForEach-Object {
-                if ($_.InnerText) { $existingSources[$_.InnerText.Trim().ToUpper()] = $true }
-            }
-
-            foreach ($proto in $script:MonitoredProtocols) {
-                $ctl = $script:ProtocolControls[$proto.Id]
-                if ($ctl) {
-                    $pidUpper = $proto.Id.ToUpper()
-                    $hasConfig = ($existingSources.ContainsKey($pidUpper) -or ($pidUpper -eq "RDP"))
-                    $ctl.CheckBox.Checked = $hasConfig
+        # AbuseIPDB налаштування: якщо в UI пусто, спробувати з реєстру
+        if (-not $txtAbuseApiKey.Text.Trim()) {
+            try {
+                $regAbuse = "HKCU:\SOFTWARE\IPBanControlCenter\AbuseIPDB"
+                if (Test-Path $regAbuse) {
+                    $p = Get-ItemProperty -Path $regAbuse -ErrorAction SilentlyContinue
+                    if ($p.ApiKey) { $txtAbuseApiKey.Text = $p.ApiKey }
+                    if ($p.Confidence) { $numAbuseConfidence.Value = [int]$p.Confidence }
+                    if ($p.Limit) { $numAbuseLimit.Value = [int]$p.Limit }
+                    if ($null -ne $p.AutoReport) { $chkAbuseAutoReport.Checked = ([int]$p.AutoReport -eq 1) }
                 }
-            }
-        } catch {}
+            } catch {}
+        }
+
+        # Моніторинг сервісів: якщо немає збережених налаштувань, зчитуємо з ipban.config
+        $settingsFile = Join-Path $env:ProgramData "IPBanControlCenter\settings.json"
+        $hasCustomProto = (Test-Path $settingsFile) -or (Test-Path "HKCU:\SOFTWARE\IPBanControlCenter\Protocols")
+        if (-not $hasCustomProto) {
+            try {
+                $existingSources = @{}
+                $xml.SelectNodes("//ExpressionsToBlock//Group/Source") | ForEach-Object {
+                    if ($_.InnerText) { $existingSources[$_.InnerText.Trim().ToUpper()] = $true }
+                }
+                $xml.SelectNodes("//LogFilesToParse//LogFile/Source") | ForEach-Object {
+                    if ($_.InnerText) { $existingSources[$_.InnerText.Trim().ToUpper()] = $true }
+                }
+
+                foreach ($proto in $script:MonitoredProtocols) {
+                    $ctl = $script:ProtocolControls[$proto.Id]
+                    if ($ctl -and $ctl.CheckBox) {
+                        $pidUpper = $proto.Id.ToUpper()
+                        $hasConfig = ($existingSources.ContainsKey($pidUpper) -or ($pidUpper -eq "RDP"))
+                        $ctl.CheckBox.Checked = $hasConfig
+                    }
+                }
+            } catch {}
+        }
 
         $statusLabel.Text = "Налаштування завантажено з $([System.IO.Path]::GetFileName($configFile))"
     } catch {
@@ -3829,6 +4011,118 @@ function Save-ConfigData {
   </Expressions>
 </Group>
 '@
+                "RDWeb" = @'
+<Group>
+  <Source>RDWeb</Source>
+  <Keywords>0x80000000000000</Keywords>
+  <Path>Application</Path>
+  <FailedLoginThreshold>0</FailedLoginThreshold>
+  <Expressions>
+    <Expression>
+      <XPath>//Provider[@Name='Microsoft-Windows-RemoteDesktopServices-RDWeb-Filter']</XPath>
+      <Regex></Regex>
+    </Expression>
+    <Expression>
+      <XPath>//EventID</XPath>
+      <Regex>^(1000|1001)$</Regex>
+    </Expression>
+    <Expression>
+      <XPath>//Data</XPath>
+      <Regex><![CDATA[(?<ipaddress>[0-9a-fA-F\.:]+)]]></Regex>
+    </Expression>
+  </Expressions>
+</Group>
+'@
+                "FTP" = @'
+<Group>
+  <Source>FTP</Source>
+  <Keywords>0x80000000000000</Keywords>
+  <Path>System</Path>
+  <FailedLoginThreshold>0</FailedLoginThreshold>
+  <Expressions>
+    <Expression>
+      <XPath>//Provider[@Name='MSFTPSVC']</XPath>
+      <Regex></Regex>
+    </Expression>
+    <Expression>
+      <XPath>//EventID</XPath>
+      <Regex>^100$</Regex>
+    </Expression>
+  </Expressions>
+</Group>
+'@
+                "HTTP" = @'
+<Group>
+  <Source>HTTP</Source>
+  <Keywords>0x80000000000000</Keywords>
+  <Path>System</Path>
+  <FailedLoginThreshold>0</FailedLoginThreshold>
+  <Expressions>
+    <Expression>
+      <XPath>//Provider[@Name='Microsoft-Windows-HttpService']</XPath>
+      <Regex></Regex>
+    </Expression>
+    <Expression>
+      <XPath>//EventID</XPath>
+      <Regex>^(1|2)$</Regex>
+    </Expression>
+  </Expressions>
+</Group>
+'@
+                "SMTP" = @'
+<Group>
+  <Source>SMTP</Source>
+  <Keywords>0x80000000000000</Keywords>
+  <Path>Application</Path>
+  <FailedLoginThreshold>0</FailedLoginThreshold>
+  <Expressions>
+    <Expression>
+      <XPath>//Provider[@Name='SMTPSVC' or @Name='MSExchangeTransport']</XPath>
+      <Regex></Regex>
+    </Expression>
+    <Expression>
+      <XPath>//EventID</XPath>
+      <Regex>^(1000|1706)$</Regex>
+    </Expression>
+  </Expressions>
+</Group>
+'@
+                "IMAP" = @'
+<Group>
+  <Source>IMAP</Source>
+  <Keywords>0x80000000000000</Keywords>
+  <Path>Application</Path>
+  <FailedLoginThreshold>0</FailedLoginThreshold>
+  <Expressions>
+    <Expression>
+      <XPath>//Provider[@Name='MSExchangeIS' or @Name='IMAP4']</XPath>
+      <Regex></Regex>
+    </Expression>
+    <Expression>
+      <XPath>//EventID</XPath>
+      <Regex>^1000$</Regex>
+    </Expression>
+  </Expressions>
+</Group>
+'@
+                "POP3" = @'
+<Group>
+  <Source>POP3</Source>
+  <Keywords>0x80000000000000</Keywords>
+  <Path>Application</Path>
+  <FailedLoginThreshold>0</FailedLoginThreshold>
+  <Expressions>
+    <Expression>
+      <XPath>//Provider[@Name='POP3SVC' or @Name='POP3']</XPath>
+      <Regex></Regex>
+    </Expression>
+    <Expression>
+      <XPath>//EventID</XPath>
+      <Regex>^1000$</Regex>
+    </Expression>
+  </Expressions>
+</Group>
+'@
             }
 
             foreach ($pKey in $protoTemplates.Keys) {
@@ -3851,6 +4145,7 @@ function Save-ConfigData {
         } catch {}
 
         $xml.Save($configFile)
+        Save-PersistentAppSettings
         $statusLabel.Text = "Налаштування успішно збережено у $configFile"
 
         $resp = [System.Windows.Forms.MessageBox]::Show("Налаштування збережено у файл:`n$configFile`n`nБажаєте перезапустити службу IPBan зараз, щоб застосувати зміни?", "Збережено", [System.Windows.Forms.MessageBoxButtons]::YesNo, [System.Windows.Forms.MessageBoxIcon]::Question)
@@ -4178,6 +4473,13 @@ $cbBanTimePreset.Add_SelectedIndexChanged({
 
 $btnSaveConfig.Add_Click({ Save-ConfigData })
 $btnReloadConfig.Add_Click({ Load-ConfigData })
+
+# Автоматичне збереження налаштувань при зміні
+$txtAbuseApiKey.Add_TextChanged({ Save-PersistentAppSettings })
+$numAbuseConfidence.Add_ValueChanged({ Save-PersistentAppSettings })
+$numAbuseLimit.Add_ValueChanged({ Save-PersistentAppSettings })
+$chkAbuseAutoReport.Add_CheckedChanged({ Save-PersistentAppSettings })
+$chkStartInTray.Add_CheckedChanged({ Save-PersistentAppSettings })
 
 $btnFetchAbuse.Add_Click({
     $apiKey = $txtAbuseApiKey.Text.Trim()

@@ -808,7 +808,7 @@ function Start-InstallationProcess {
         $pbInstall.Value = 20
         Log-Step "Копіювання файлів IPBan Control Center..."
 
-        $filesToCopy = @("IPBanGUI.ps1", "Run_IPBan_GUI.bat", "app.ico", "IPBanControlCenter.exe", "README_IPBan_GUI.md")
+        $filesToCopy = @("IPBanGUI.ps1", "Run_IPBan_GUI.bat", "app.ico", "IPBanControlCenter.exe", "README_IPBan_GUI.md", "settings.json")
         foreach ($f in $filesToCopy) {
             $src = Join-Path $sourceDir $f
             if (Test-Path $src) {
@@ -816,6 +816,22 @@ function Start-InstallationProcess {
                 Log-Step "  -> Скопійовано: $f"
             }
         }
+
+        # Збереження/перевірка постійних налаштувань у ProgramData
+        try {
+            $progDataDir = Join-Path $env:ProgramData "IPBanControlCenter"
+            if (-not (Test-Path $progDataDir)) {
+                New-Item -ItemType Directory -Path $progDataDir -Force | Out-Null
+            }
+            $targetSettings = Join-Path $progDataDir "settings.json"
+            $srcSettings = Join-Path $sourceDir "settings.json"
+            if (Test-Path $targetSettings) {
+                Log-Step "  -> Знайдено збережені налаштування користувача (налаштування моніторингу та API ключ збережено)"
+            } elseif (Test-Path $srcSettings) {
+                Copy-Item -Path $srcSettings -Destination $targetSettings -Force
+                Log-Step "  -> Застосовано конфігурацію налаштувань: $targetSettings"
+            }
+        } catch {}
 
         # Якщо лаунчер exe ще не згенеровано, компілюємо на місці
         $targetExe = Join-Path $targetDir "IPBanControlCenter.exe"
@@ -970,16 +986,14 @@ try {
     }
 } catch {}
 
-# 6b. Очищення прив'язок та налаштувань у реєстрі HKLM та HKCU
+# 6b. Очищення системної реєстрації без видалення налаштувань користувача
 try {
     $regM = "HKLM:\SOFTWARE\IPBanControlCenter"
     if (Test-Path $regM) {
-        Remove-Item -Path $regM -Recurse -Force -ErrorAction SilentlyContinue
+        Remove-ItemProperty -Path $regM -Name "InstallPath" -ErrorAction SilentlyContinue
+        Remove-ItemProperty -Path $regM -Name "InstallDate" -ErrorAction SilentlyContinue
     }
-    $regU = "HKCU:\SOFTWARE\IPBanControlCenter"
-    if (Test-Path $regU) {
-        Remove-Item -Path $regU -Recurse -Force -ErrorAction SilentlyContinue
-    }
+    # Зберігаємо налаштування користувача (HKCU та ProgramData\IPBanControlCenter) для наступних встановлень!
 } catch {}
 
 # 7. Відкладене видалення папки програми у фоні

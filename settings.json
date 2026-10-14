@@ -1,0 +1,27 @@
+﻿{
+    "AbuseIPDB":  {
+                      "ApiKey":  "75b9b570bd2627ab4a50f6fad8f1d89de49b80fc19cc1bcb25ef2d403e1",
+                      "Confidence":  100,
+                      "Limit":  1000,
+                      "AutoReport":  false
+                  },
+    "Protocols":  {
+                      "RDP":  true,
+                      "SSH":  true,
+                      "MSSQL":  true,
+                      "MySQL":  true,
+                      "FTP":  false,
+                      "HTTP":  false,
+                      "SMTP":  false,
+                      "IMAP":  false,
+                      "POP3":  false,
+                      "RRAS":  true,
+                      "RDWeb":  true,
+                      "VNC":  false
+                  },
+    "General":  {
+                    "Language":  "UA",
+                    "StartInTray":  true,
+                    "IPBanPath":  "C:\\Program Files\\IPBan"
+                }
+}
