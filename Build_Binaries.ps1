@@ -224,6 +224,7 @@ namespace IPBanControlCenter {
                 if (!isAdmin) {
                     psi.Verb = "runas";
                 }
+                psi.WindowStyle = ProcessWindowStyle.Hidden;
                 psi.UseShellExecute = true;
                 psi.WorkingDirectory = baseDir;
 
@@ -331,10 +332,11 @@ namespace IPBanSetup {
                 // 4. Запускаємо майстер встановлення
                 ProcessStartInfo psi = new ProcessStartInfo();
                 psi.FileName = "powershell.exe";
-                psi.Arguments = "-NoProfile -ExecutionPolicy Bypass -File \"" + installerPath + "\"";
+                psi.Arguments = "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File \"" + installerPath + "\"";
                 if (!isAdmin) {
                     psi.Verb = "runas";
                 }
+                psi.WindowStyle = ProcessWindowStyle.Hidden;
                 psi.UseShellExecute = true;
                 psi.WorkingDirectory = tempDir;
 

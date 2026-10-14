@@ -3,6 +3,20 @@
 # Графічний майстер встановлення (Installer Wizard) для IPBan Manager & Control Center
 # ==============================================================================
 
+# Приховуємо вікно консолі (якщо скрипт запущено через powershell.exe)
+try {
+    if (-not ([System.Management.Automation.PSTypeName]'Win32Utils.Win32Console').Type) {
+        Add-Type -Name Win32Console -Namespace Win32Utils -MemberDefinition '
+        [DllImport("Kernel32.dll")] public static extern IntPtr GetConsoleWindow();
+        [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr hWnd, Int32 nCmdShow);
+        ' -ErrorAction SilentlyContinue
+    }
+    $consolePtr = [Win32Utils.Win32Console]::GetConsoleWindow()
+    if ($consolePtr -and $consolePtr -ne [IntPtr]::Zero) {
+        [Win32Utils.Win32Console]::ShowWindow($consolePtr, 0) | Out-Null # 0 = SW_HIDE
+    }
+} catch {}
+
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
 
@@ -14,7 +28,8 @@ if (-not $isAdmin) {
     try {
         $psi = New-Object System.Diagnostics.ProcessStartInfo
         $psi.FileName = "powershell.exe"
-        $psi.Arguments = "-NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`""
+        $psi.Arguments = "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$PSCommandPath`""
+        $psi.WindowStyle = [System.Diagnostics.ProcessWindowStyle]::Hidden
         $psi.Verb = "runas"
         [System.Diagnostics.Process]::Start($psi) | Out-Null
         exit 0
@@ -24,18 +39,20 @@ if (-not $isAdmin) {
     }
 }
 
-$sourceDir = Split-Path -Parent $MyInvocation.MyCommand.Path
-if (-not $sourceDir) { $sourceDir = (Get-Location).Path }
+$sourceDir = if ($MyInvocation.MyCommand.Path) { Split-Path -Parent $MyInvocation.MyCommand.Path } else { (Get-Location).Path }
+
+$script:InstallerVersion = "v2.2.2"
 
 # ------------------------------------------------------------------------------
 # Локалізація майстра інсталяції (Multi-Language: UA / EN)
 # ------------------------------------------------------------------------------
 $script:InstI18N = @{
     "UA" = @{
-        "FormTitle" = "Встановлення — IPBan Manager & Control Center"
+        "FormTitle" = "Встановлення — IPBan Manager & Control Center $script:InstallerVersion"
         "Brand" = "IPBan Control`nCenter"
+        "BrandVer" = "$script:InstallerVersion"
         "Steps" = @("1. Вітання", "2. Папка програми", "3. Параметри", "4. Встановлення", "5. Завершення")
-        "WelcomeTitle" = "Ласкаво просимо до майстра встановлення!"
+        "WelcomeTitle" = "Ласкаво просимо до майстра встановлення $script:InstallerVersion!"
         "WelcomeDesc" = "Ця програма встановить сучасний графічний інтерфейс керування захистом`nIPBan на ваш комп'ютер або сервер."
         "FeaturesHeader" = "IPBan Control Center забезпечує:"
         "Features" = @(
@@ -60,7 +77,7 @@ $script:InstI18N = @{
         "ChkCheckService" = "Перевірити наявність служби IPBan (та повідомити стан)"
         "InstallTitle" = "Встановлення програми..."
         "FinishTitle" = "Встановлення успішно завершено!"
-        "FinishDesc" = "IPBan Manager & Control Center успішно встановлено на ваш комп'ютер.`n`nПрограма готова до роботи. Ви можете запускати її через ярлик на Робочому столі або з меню «Пуск»."
+        "FinishDesc" = "IPBan Manager & Control Center $script:InstallerVersion успішно встановлено на ваш комп'ютер.`n`nПрограма готова до роботи. Ви можете запускати її через ярлик на Робочому столі або з меню «Пуск»."
         "ChkLaunchNow" = "Запустити IPBan Control Center зараз"
         "BtnBack" = "< Назад"
         "BtnNext" = "Далі >"
@@ -71,10 +88,11 @@ $script:InstI18N = @{
         "CancelTitle" = "Скасування"
     }
     "EN" = @{
-        "FormTitle" = "Setup — IPBan Manager & Control Center"
+        "FormTitle" = "Setup — IPBan Manager & Control Center $script:InstallerVersion"
         "Brand" = "IPBan Control`nCenter"
+        "BrandVer" = "$script:InstallerVersion"
         "Steps" = @("1. Welcome", "2. Destination", "3. Options", "4. Installation", "5. Finished")
-        "WelcomeTitle" = "Welcome to the Setup Wizard!"
+        "WelcomeTitle" = "Welcome to the Setup Wizard ($script:InstallerVersion)!"
         "WelcomeDesc" = "This wizard will install the modern graphical interface for IPBan`nsecurity management on your computer or server."
         "FeaturesHeader" = "IPBan Control Center features:"
         "Features" = @(
@@ -99,7 +117,7 @@ $script:InstI18N = @{
         "ChkCheckService" = "Check IPBan service presence (and notify status)"
         "InstallTitle" = "Installing application..."
         "FinishTitle" = "Installation Successfully Completed!"
-        "FinishDesc" = "IPBan Manager & Control Center has been installed.`n`nThe software is ready to protect your system from unauthorized access."
+        "FinishDesc" = "IPBan Manager & Control Center $script:InstallerVersion has been installed.`n`nThe software is ready to protect your system from unauthorized access."
         "ChkLaunchNow" = "Launch IPBan Control Center now"
         "BtnBack" = "< Back"
         "BtnNext" = "Next >"
@@ -169,7 +187,7 @@ function Set-SmoothControl {
 # Головне вікно інсталятора
 # ------------------------------------------------------------------------------
 $form = New-Object System.Windows.Forms.Form
-$form.Text = "Встановлення — IPBan Manager & Control Center"
+$form.Text = "Встановлення — IPBan Manager & Control Center $script:InstallerVersion"
 $form.Size = New-Object System.Drawing.Size(750, 500)
 $form.StartPosition = "CenterScreen"
 $form.FormBorderStyle = [System.Windows.Forms.FormBorderStyle]::FixedDialog
@@ -208,9 +226,17 @@ $lblBrand = New-Object System.Windows.Forms.Label
 $lblBrand.Text = "IPBan Control`nCenter"
 $lblBrand.Font = New-Object System.Drawing.Font("Segoe UI", 11, [System.Drawing.FontStyle]::Bold)
 $lblBrand.ForeColor = [System.Drawing.Color]::White
-$lblBrand.Location = New-Object System.Drawing.Point(72, 22)
-$lblBrand.Size = New-Object System.Drawing.Size(130, 48)
+$lblBrand.Location = New-Object System.Drawing.Point(72, 16)
+$lblBrand.Size = New-Object System.Drawing.Size(130, 38)
 $sidebar.Controls.Add($lblBrand)
+
+$lblBrandVer = New-Object System.Windows.Forms.Label
+$lblBrandVer.Text = "$script:InstallerVersion"
+$lblBrandVer.Font = New-Object System.Drawing.Font("Segoe UI", 8.5, [System.Drawing.FontStyle]::Bold)
+$lblBrandVer.ForeColor = [System.Drawing.Color]::FromArgb(56, 189, 248)
+$lblBrandVer.Location = New-Object System.Drawing.Point(72, 54)
+$lblBrandVer.Size = New-Object System.Drawing.Size(130, 18)
+$sidebar.Controls.Add($lblBrandVer)
 
 # Кроки інсталяції в бічній панелі
 $stepsList = @("1. Вітання", "2. Папка програми", "3. Параметри", "4. Встановлення", "5. Завершення")
@@ -620,6 +646,7 @@ $script:CurrentStep = 0
 function Apply-InstallerLanguage {
     $form.Text = InstT "FormTitle"
     $lblBrand.Text = InstT "Brand"
+    $lblBrandVer.Text = InstT "BrandVer"
 
     $stepTexts = InstT "Steps"
     for ($i = 0; $i -lt $stepLabels.Count; $i++) {
