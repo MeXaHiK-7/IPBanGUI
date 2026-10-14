@@ -10,6 +10,9 @@ Add-Type -AssemblyName System.Windows.Forms
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 if (-not $scriptDir) { $scriptDir = (Get-Location).Path }
 
+$appVersion = "2.2.2.0"
+$appDisplayVersion = "2.2.2"
+
 # Допоміжна функція створення GZip Base64 архіву файлів
 function New-GZipPackage([string[]]$fileNames, [string]$baseFolder) {
     $ms = New-Object System.IO.MemoryStream
@@ -96,9 +99,19 @@ using System;
 using System.Diagnostics;
 using System.IO;
 using System.IO.Compression;
+using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Security.Principal;
 using System.Windows.Forms;
+
+[assembly: AssemblyTitle("IPBan Control Center")]
+[assembly: AssemblyDescription("IPBan Manager and Control Center")]
+[assembly: AssemblyCompany("IPBan Community & Tooling")]
+[assembly: AssemblyProduct("IPBan Control Center")]
+[assembly: AssemblyCopyright("Copyright (C) 2026")]
+[assembly: AssemblyVersion("$appVersion")]
+[assembly: AssemblyFileVersion("$appVersion")]
+[assembly: AssemblyInformationalVersion("$appDisplayVersion")]
 
 namespace IPBanControlCenter {
     class Program {
@@ -262,8 +275,18 @@ using System;
 using System.Diagnostics;
 using System.IO;
 using System.IO.Compression;
+using System.Reflection;
 using System.Security.Principal;
 using System.Windows.Forms;
+
+[assembly: AssemblyTitle("Setup IPBan GUI")]
+[assembly: AssemblyDescription("IPBan Manager and Control Center Installer")]
+[assembly: AssemblyCompany("IPBan Community & Tooling")]
+[assembly: AssemblyProduct("IPBan Manager & Control Center")]
+[assembly: AssemblyCopyright("Copyright (C) 2026")]
+[assembly: AssemblyVersion("$appVersion")]
+[assembly: AssemblyFileVersion("$appVersion")]
+[assembly: AssemblyInformationalVersion("$appDisplayVersion")]
 
 namespace IPBanSetup {
     class Program {
@@ -308,7 +331,7 @@ namespace IPBanSetup {
                 // 4. Запускаємо майстер встановлення
                 ProcessStartInfo psi = new ProcessStartInfo();
                 psi.FileName = "powershell.exe";
-                psi.Arguments = "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File \"" + installerPath + "\"";
+                psi.Arguments = "-NoProfile -ExecutionPolicy Bypass -File \"" + installerPath + "\"";
                 if (!isAdmin) {
                     psi.Verb = "runas";
                 }

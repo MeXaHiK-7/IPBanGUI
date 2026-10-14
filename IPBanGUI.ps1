@@ -1,4 +1,4 @@
-param(
+﻿param(
     [switch]$tray,
     [switch]$minimized,
     [switch]$show
@@ -67,7 +67,7 @@ try {
 # ------------------------------------------------------------------------------
 # Глобальні змінні та стан
 # ------------------------------------------------------------------------------
-$script:AppVersion = "v2.2.2"
+$script:AppVersion = "v2.2.1"
 $script:DefaultInstallPath = "C:\Program Files\IPBan"
 $script:CurrentInstallPath = $script:DefaultInstallPath
 $script:ServiceName = "IPBan"
@@ -220,13 +220,12 @@ $script:I18N = @{
         "TabSetup" = "  Інсталяція та Сервіс  "
         "Search" = "Пошук:"
         "Filter" = "Фільтр:"
-        "FilterBanned" = "⛔ Тільки локальні блокування"
+        "FilterBanned" = "⛔ Тільки заблоковані"
         "FilterWhitelist" = "⚪ Тільки білий список"
-        "FilterBlacklist" = "🏴 Чорний список (Blacklist)"
         "FilterAllRules" = "📋 Всі правила IPBan"
         "BtnUnbanSelected" = "Розблокувати обрані"
         "BtnManualBan" = "Заблокувати вручну..."
-        "BtnUnbanAll" = "Очистити локальні блокування"
+        "BtnUnbanAll" = "Очистити всі блокування"
         "BtnExport" = "Експорт..."
         "ColIndex" = "#"
         "ColIP" = "IP-адреса (Whois)"
@@ -237,13 +236,12 @@ $script:I18N = @{
         "BanActive" = "Активне"
         "BanPerConfig" = "За конфігом"
         "WhitelistNote" = "— (Білий список)"
-        "BlacklistNote" = "— (Чорний список)"
-        "CardTotalBanned" = "Локально заблоковано"
+        "CardTotalBanned" = "Всього заблоковано"
         "CardUniqueCountries" = "Країн-джерел атак"
         "CardTopCountry" = "Головна країна атак"
         "CardPeakHour" = "Піковий час атак"
-        "GbCountryStats" = "Топ країн за локальними атаками"
-        "GbTimeStats" = "Розподіл локальних атак за часом доби (24 години)"
+        "GbCountryStats" = "Топ країн за кількістю атак"
+        "GbTimeStats" = "Розподіл атак за часом доби (24 години)"
         "ColStatsRank" = "#"
         "ColStatsCountry" = "Країна"
         "ColStatsCount" = "Заблоковано IP"
@@ -253,18 +251,17 @@ $script:I18N = @{
         "ColHourAttacks" = "Кількість подій"
         "ColHourBar" = "Рівень активності"
         "BtnRefreshStats" = "Оновити статистику"
-        "PeakNotice" = "[!] Найвища активність локальних атак зафіксована у проміжку: {0}:00 - {1}:00 ({2} атак)"
-        "NoActiveBans" = "Локальних блокувань немає"
+        "PeakNotice" = "[!] Найвища активність атак зафіксована у проміжку: {0}:00 - {1}:00 ({2} атак)"
+        "NoActiveBans" = "Активних блокувань немає"
         "ResolvingCountry" = "🌐 Визначення..."
         "LocalNetwork" = "Локальна мережа"
         "UnknownCountry" = "Невідомо"
         "StatusActive" = "🟢 Активно"
         "StatusDisabled" = "⚪ Вимкнено"
-        "LblNoBans" = "🟢 Локальних блокувань немає (0 IP-адрес) | Білий список: {0} | Чорний список: {1}"
-        "LblBansCount" = "⛔ Локально заблоковано: {0} IP (Відображено: {1}) | Чорний список: {2} | Білий список: {3}"
-        "LblWhiteCount" = "⚪ У білому списку брандмауера: {0} IP (Відображено: {1}) | Локально заблоковано: {2}"
-        "LblBlackCount" = "🏴 У чорному списку (Blacklist): {0} IP (Відображено: {1}) | Локально заблоковано: {2}"
-        "LblAllRulesCount" = "📋 Всього записів IPBan у брандмауері: {0} | Відображено: {1}"
+        "LblNoBans" = "🟢 Активних блокувань немає (0 IP-адрес) | У білому списку брандмауера: {0} IP-адрес"
+        "LblBansCount" = "⛔ Заблоковано в брандмауері: {0} IP-адрес (Відображено: {1}) | У білому списку: {2} IP-адрес"
+        "LblWhiteCount" = "⚪ У білому списку брандмауера: {0} IP-адрес (Відображено: {1}) | Заблоковано: {2} IP-адрес"
+        "LblAllRulesCount" = "📋 Всього правил IPBan у брандмауері: {0} | Відображено: {1}"
         "GbGeneral" = "Правила виявлення та блокування"
         "LblFailedAttempts" = "Поріг невдалих спроб входу (FailedLoginAttemptsBeforeBan):"
         "LblBanTime" = "Час блокування (BanTime, формат Дні:Год:Хв:Сек):"
@@ -367,13 +364,12 @@ $script:I18N = @{
         "TabSetup" = "  Installation & Service  "
         "Search" = "Search:"
         "Filter" = "Filter:"
-        "FilterBanned" = "⛔ Local Bans Only"
+        "FilterBanned" = "⛔ Blocked Only"
         "FilterWhitelist" = "⚪ Whitelist Only"
-        "FilterBlacklist" = "🏴 Blacklist Only"
         "FilterAllRules" = "📋 All IPBan Rules"
         "BtnUnbanSelected" = "Unban Selected"
         "BtnManualBan" = "Manual Ban..."
-        "BtnUnbanAll" = "Clear Local Bans"
+        "BtnUnbanAll" = "Clear All Bans"
         "BtnExport" = "Export..."
         "ColIndex" = "#"
         "ColIP" = "IP Address (Whois)"
@@ -384,13 +380,12 @@ $script:I18N = @{
         "BanActive" = "Active"
         "BanPerConfig" = "Per config"
         "WhitelistNote" = "— (Whitelist)"
-        "BlacklistNote" = "— (Blacklist)"
-        "CardTotalBanned" = "Locally Blocked IPs"
+        "CardTotalBanned" = "Total Blocked IPs"
         "CardUniqueCountries" = "Unique Countries"
         "CardTopCountry" = "Top Attack Country"
         "CardPeakHour" = "Peak Attack Hours"
-        "GbCountryStats" = "Top Attacking Countries (Local)"
-        "GbTimeStats" = "24-Hour Local Attack Distribution"
+        "GbCountryStats" = "Top Attacking Countries"
+        "GbTimeStats" = "24-Hour Attack Distribution"
         "ColStatsRank" = "#"
         "ColStatsCountry" = "Country"
         "ColStatsCount" = "Blocked IPs"
@@ -400,18 +395,17 @@ $script:I18N = @{
         "ColHourAttacks" = "Event Count"
         "ColHourBar" = "Activity Level"
         "BtnRefreshStats" = "Refresh Analytics"
-        "PeakNotice" = "[!] Peak local attack activity detected at {0}:00 - {1}:00 ({2} attacks)"
-        "NoActiveBans" = "No local bans"
+        "PeakNotice" = "[!] Peak attack activity detected at {0}:00 - {1}:00 ({2} attacks)"
+        "NoActiveBans" = "No active bans"
         "ResolvingCountry" = "🌐 Resolving..."
         "LocalNetwork" = "Local Network"
         "UnknownCountry" = "Unknown"
         "StatusActive" = "🟢 Active"
         "StatusDisabled" = "⚪ Disabled"
-        "LblNoBans" = "🟢 No local bans (0 IP addresses) | Whitelist: {0} | Blacklist: {1}"
-        "LblBansCount" = "⛔ Locally blocked: {0} IPs (Showing: {1}) | Blacklist: {2} | Whitelist: {3}"
-        "LblWhiteCount" = "⚪ Firewall whitelist: {0} IPs (Showing: {1}) | Locally blocked: {2}"
-        "LblBlackCount" = "🏴 Firewall blacklist: {0} IPs (Showing: {1}) | Locally blocked: {2}"
-        "LblAllRulesCount" = "📋 Total IPBan records in firewall: {0} | Showing: {1}"
+        "LblNoBans" = "🟢 No active blocks (0 IP addresses) | Firewall whitelist: {0} IP addresses"
+        "LblBansCount" = "⛔ Blocked in firewall: {0} IP addresses (Showing: {1}) | In whitelist: {2} IP addresses"
+        "LblWhiteCount" = "⚪ Firewall whitelist: {0} IP addresses (Showing: {1}) | Blocked: {2} IP addresses"
+        "LblAllRulesCount" = "📋 Total IPBan rules in firewall: {0} | Showing: {1}"
         "GbGeneral" = "Detection and Blocking Rules"
         "LblFailedAttempts" = "Failed login attempts threshold (FailedLoginAttemptsBeforeBan):"
         "LblBanTime" = "Ban duration (BanTime, format Days:Hours:Min:Sec):"
@@ -868,16 +862,12 @@ function Get-FirewallBannedIPs {
                         continue
                     }
 
-                    $isWhite = ($rule.Action -ne 0) -or ($rule.Name -like "*Whitelist*")
-                    $isBlacklist = (-not $isWhite) -and ($rule.Name -like "*Blacklist*")
-                    $actionType = if ($isWhite) { "Allow" } elseif ($isBlacklist) { "Blacklist" } else { "Block" }
-                    $actionLabel = if ($isWhite) { "⚪ Дозволено (Whitelist)" } elseif ($isBlacklist) { "🏴 Чорний список (Blacklist)" } else { "⛔ Локальне блокування" }
-
+                    $isBlock = ($rule.Action -eq 0) -and ($rule.Name -notlike "*Whitelist*")
                     $results += [PSCustomObject]@{
                         IPAddress   = $cleanIp
                         RuleName    = $rule.Name
-                        ActionType  = $actionType
-                        ActionLabel = $actionLabel
+                        ActionType  = if ($isBlock) { "Block" } else { "Allow" }
+                        ActionLabel = if ($isBlock) { "⛔ Блокування" } else { "⚪ Дозволено (Whitelist)" }
                         Enabled     = $rule.Enabled
                     }
                 }
@@ -910,16 +900,12 @@ function Get-FirewallBannedIPs {
                             continue
                         }
 
-                        $isWhite = ($r.Action -ne "Block") -or ($r.Name -like "*Whitelist*")
-                        $isBlacklist = (-not $isWhite) -and ($r.Name -like "*Blacklist*")
-                        $actionType = if ($isWhite) { "Allow" } elseif ($isBlacklist) { "Blacklist" } else { "Block" }
-                        $actionLabel = if ($isWhite) { "⚪ Дозволено (Whitelist)" } elseif ($isBlacklist) { "🏴 Чорний список (Blacklist)" } else { "⛔ Локальне блокування" }
-
+                        $isBlock = ($r.Action -eq "Block") -and ($r.Name -notlike "*Whitelist*")
                         $results += [PSCustomObject]@{
                             IPAddress   = $cleanIp
                             RuleName    = $r.Name
-                            ActionType  = $actionType
-                            ActionLabel = $actionLabel
+                            ActionType  = if ($isBlock) { "Block" } else { "Allow" }
+                            ActionLabel = if ($isBlock) { "⛔ Блокування" } else { "⚪ Дозволено (Whitelist)" }
                             Enabled     = $r.Enabled
                         }
                     }
@@ -1619,11 +1605,10 @@ $panelBannedActions.Controls.Add($lblFilterType)
 $cbRuleFilter = New-Object System.Windows.Forms.ComboBox
 $cbRuleFilter.DropDownStyle = [System.Windows.Forms.ComboBoxStyle]::DropDownList
 $cbRuleFilter.Location = New-Object System.Drawing.Point(245, 12)
-$cbRuleFilter.Size = New-Object System.Drawing.Size(205, 25)
+$cbRuleFilter.Size = New-Object System.Drawing.Size(175, 25)
 $cbRuleFilter.Items.AddRange(@(
-    "⛔ Тільки локальні блокування",
+    "⛔ Тільки заблоковані",
     "⚪ Тільки білий список",
-    "🏴 Чорний список (Blacklist)",
     "📋 Всі правила IPBan"
 ))
 $cbRuleFilter.SelectedIndex = 0
@@ -2788,12 +2773,11 @@ function Update-UILanguage {
 
     $lblSearch.Text = T "Search"
     $lblFilterType.Text = T "Filter"
-    if ($cbRuleFilter -and $cbRuleFilter.Items.Count -ge 4) {
+    if ($cbRuleFilter -and $cbRuleFilter.Items.Count -ge 3) {
         $curIdx = $cbRuleFilter.SelectedIndex
         $cbRuleFilter.Items[0] = T "FilterBanned"
         $cbRuleFilter.Items[1] = T "FilterWhitelist"
-        $cbRuleFilter.Items[2] = T "FilterBlacklist"
-        $cbRuleFilter.Items[3] = T "FilterAllRules"
+        $cbRuleFilter.Items[2] = T "FilterAllRules"
         if ($curIdx -ge 0) { $cbRuleFilter.SelectedIndex = $curIdx }
     }
     $btnUnbanSelected.Text = T "BtnUnbanSelected"
@@ -3217,14 +3201,13 @@ function Refresh-BannedIPs {
         }
         $blockCount = @($script:LastBannedIPs | Where-Object { $_.ActionType -eq "Block" }).Count
         $allowCount = @($script:LastBannedIPs | Where-Object { $_.ActionType -eq "Allow" }).Count
-        $blackCount = @($script:LastBannedIPs | Where-Object { $_.ActionType -eq "Blacklist" }).Count
-        $statusLabel.Text = if ($script:CurrentLang -eq "EN") { "Rules refreshed. Local bans: $blockCount | Whitelist: $allowCount | Blacklist: $blackCount" } else { "Правила оновлено. Локальних блокувань: $blockCount | Білий список: $allowCount | Чорний список: $blackCount" }
+        $statusLabel.Text = if ($script:CurrentLang -eq "EN") { "Rules refreshed. Blocked: $blockCount | Whitelisted: $allowCount" } else { "Правила оновлено. Заблоковано: $blockCount | У білому списку: $allowCount" }
 
-        # Перевірка на новий бан для тривоги (Alert) - тільки локальні блокування!
+        # Перевірка на новий бан для тривоги (Alert)
         if ($script:PreviousBannedCount -ge 0 -and $blockCount -gt $script:PreviousBannedCount) {
             $diff = $blockCount - $script:PreviousBannedCount
             $script:AlertActive = $true
-            $alertMsg = if ($script:CurrentLang -eq "EN") { "IPBan banned new IP addresses: +$diff! (Local total: $blockCount)" } else { "IPBan заблокував нових адрес: +$diff! (Локально: $blockCount)" }
+            $alertMsg = if ($script:CurrentLang -eq "EN") { "IPBan banned new IP addresses: +$diff! (Total: $blockCount)" } else { "IPBan заблокував нових адрес: +$diff! (Всього: $blockCount)" }
             Update-TrayIndicator -forceState "Alert" -alertMessage $alertMsg
             if ($script:AlertResetTimer) { $script:AlertResetTimer.Stop(); $script:AlertResetTimer.Dispose() }
             $script:AlertResetTimer = New-Object System.Windows.Forms.Timer
@@ -3255,25 +3238,17 @@ function Filter-BannedGrid {
     $allList = @($script:LastBannedIPs)
     $blockCount = @($allList | Where-Object { $_.ActionType -eq "Block" }).Count
     $allowCount = @($allList | Where-Object { $_.ActionType -eq "Allow" }).Count
-    $blackCount = @($allList | Where-Object { $_.ActionType -eq "Blacklist" }).Count
 
     # Отримуємо карту часу блокувань із БД / логів
     $timesMap = Get-IPBanTimesMap
 
     $idx = 1
     foreach ($item in $allList) {
-        # Режими фільтрації:
-        # 0: ⛔ Тільки локальні блокування (Block)
-        # 1: ⚪ Тільки білий список (Allow)
-        # 2: 🏴 Чорний список (Blacklist)
-        # 3: 📋 Всі правила IPBan
         if ($filterMode -eq 0 -and $item.ActionType -ne "Block") { continue }
         if ($filterMode -eq 1 -and $item.ActionType -ne "Allow") { continue }
-        if ($filterMode -eq 2 -and $item.ActionType -ne "Blacklist") { continue }
 
         if ([string]::IsNullOrEmpty($filter) -or $item.IPAddress.Contains($filter) -or $item.RuleName.Contains($filter)) {
             $isBlock = ($item.ActionType -eq "Block")
-            $isBlacklist = ($item.ActionType -eq "Blacklist")
 
             $banDateStr = "—"
             $unbanDateStr = "—"
@@ -3302,9 +3277,6 @@ function Filter-BannedGrid {
                         $unbanDateStr = (T "BanPerConfig")
                     }
                 }
-            } elseif ($isBlacklist) {
-                $banDateStr = (T "BlacklistNote")
-                $unbanDateStr = (T "BanPermanent")
             } else {
                 $banDateStr = (T "WhitelistNote")
                 $unbanDateStr = "—"
@@ -3312,7 +3284,7 @@ function Filter-BannedGrid {
 
             $cleanIp = $item.IPAddress.Trim().Replace("/255.255.255.255", "").Replace("/32", "")
             $countryStr = "—"
-            if ($isBlock -or $isBlacklist) {
+            if ($isBlock) {
                 $geo = Get-IPCountryInfo $cleanIp
                 if ($geo) {
                     $namePart = if ($geo.Name -and $geo.Code -ne $geo.Name) { " - " + $geo.Name } else { "" }
@@ -3333,20 +3305,12 @@ function Filter-BannedGrid {
             $row = $dgvBanned.Rows[$rowIdx]
             $row.Tag = $item.ActionType
 
-            # Розділення кольором:
-            # - блідо-червоний для локально заблокованих
-            # - блідо-фіолетовий/темно-червоний для чорного списку (Blacklist)
-            # - блідо-зелений для білого списку
+            # Розділення кольором: блідо-червоний для заблокованих, блідо-зелений для білого списку
             if ($isBlock) {
                 $row.DefaultCellStyle.BackColor = [System.Drawing.Color]::FromArgb(254, 242, 242)
                 $row.DefaultCellStyle.ForeColor = [System.Drawing.Color]::FromArgb(153, 27, 27)
                 $row.DefaultCellStyle.SelectionBackColor = [System.Drawing.Color]::FromArgb(254, 202, 202)
                 $row.DefaultCellStyle.SelectionForeColor = [System.Drawing.Color]::FromArgb(153, 27, 27)
-            } elseif ($isBlacklist) {
-                $row.DefaultCellStyle.BackColor = [System.Drawing.Color]::FromArgb(243, 244, 246)
-                $row.DefaultCellStyle.ForeColor = [System.Drawing.Color]::FromArgb(31, 41, 55)
-                $row.DefaultCellStyle.SelectionBackColor = [System.Drawing.Color]::FromArgb(229, 231, 235)
-                $row.DefaultCellStyle.SelectionForeColor = [System.Drawing.Color]::FromArgb(17, 24, 39)
             } else {
                 $row.DefaultCellStyle.BackColor = [System.Drawing.Color]::FromArgb(240, 253, 244)
                 $row.DefaultCellStyle.ForeColor = [System.Drawing.Color]::FromArgb(22, 101, 52)
@@ -3360,18 +3324,15 @@ function Filter-BannedGrid {
 
     if ($filterMode -eq 0) {
         if ($blockCount -eq 0) {
-            $lblBannedCount.Text = [string]::Format((T "LblNoBans"), $allowCount, $blackCount)
+            $lblBannedCount.Text = [string]::Format((T "LblNoBans"), $allowCount)
             $lblBannedCount.ForeColor = [System.Drawing.Color]::FromArgb(22, 101, 52)
         } else {
-            $lblBannedCount.Text = [string]::Format((T "LblBansCount"), $blockCount, $dgvBanned.Rows.Count, $blackCount, $allowCount)
+            $lblBannedCount.Text = [string]::Format((T "LblBansCount"), $blockCount, $dgvBanned.Rows.Count, $allowCount)
             $lblBannedCount.ForeColor = [System.Drawing.Color]::FromArgb(185, 28, 28)
         }
     } elseif ($filterMode -eq 1) {
         $lblBannedCount.Text = [string]::Format((T "LblWhiteCount"), $allowCount, $dgvBanned.Rows.Count, $blockCount)
         $lblBannedCount.ForeColor = [System.Drawing.Color]::FromArgb(37, 99, 235)
-    } elseif ($filterMode -eq 2) {
-        $lblBannedCount.Text = [string]::Format((T "LblBlackCount"), $blackCount, $dgvBanned.Rows.Count, $blockCount)
-        $lblBannedCount.ForeColor = [System.Drawing.Color]::FromArgb(55, 65, 81)
     } else {
         $lblBannedCount.Text = [string]::Format((T "LblAllRulesCount"), $allList.Count, $dgvBanned.Rows.Count)
         $lblBannedCount.ForeColor = [System.Drawing.Color]::FromArgb(51, 65, 85)
@@ -4078,14 +4039,14 @@ $btnManualBan.Add_Click({
 })
 
 $btnUnbanAll.Add_Click({
-    $confirm = [System.Windows.Forms.MessageBox]::Show("УВАГА! Ви дійсно хочете розблокувати ВСІ локально заблоковані IP-адреси у правилах IPBan?`n`nПравила Білого списку (Whitelist) та Чорного списку (Blacklist) НЕ будуть видалені.", "Очищення локальних блокувань", [System.Windows.Forms.MessageBoxButtons]::YesNo, [System.Windows.Forms.MessageBoxIcon]::Warning)
+    $confirm = [System.Windows.Forms.MessageBox]::Show("УВАГА! Ви дійсно хочете розблокувати ВСІ поточні IP-адреси у правилах блокування IPBan?`n`nПравила Білого списку (Whitelist) НЕ будуть видалені.", "Очищення всіх блокувань", [System.Windows.Forms.MessageBoxButtons]::YesNo, [System.Windows.Forms.MessageBoxIcon]::Warning)
     if ($confirm -eq [System.Windows.Forms.DialogResult]::Yes) {
         try {
             $allBannedIps = @($script:LastBannedIPs | Where-Object { $_.ActionType -eq "Block" -and $_.IPAddress -notlike "255.255.255.255*" } | ForEach-Object { $_.IPAddress })
 
             $fw = New-Object -ComObject HNetCfg.FwPolicy2
             foreach ($rule in $fw.Rules) {
-                if ($rule.Name -like "IPBan*" -and $rule.Name -notlike "*Whitelist*" -and $rule.Name -notlike "*Blacklist*" -and $rule.Action -eq 0) {
+                if ($rule.Name -like "IPBan*" -and $rule.Name -notlike "*Whitelist*" -and $rule.Action -eq 0) {
                     $rule.RemoteAddresses = "255.255.255.255"
                     $rule.Enabled = $true
                 }
@@ -4105,7 +4066,7 @@ $btnUnbanAll.Add_Click({
                     $allBannedIps | Set-Content -Path $unbanFile -Encoding UTF8
                 }
             }
-            [System.Windows.Forms.MessageBox]::Show("Всі локальні правила блокування успішно очищено!", "Успіх", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Information)
+            [System.Windows.Forms.MessageBox]::Show("Всі правила блокування успішно очищено!", "Успіх", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Information)
             Refresh-BannedIPs
         } catch {
             [System.Windows.Forms.MessageBox]::Show("Помилка очищення: $_", "Помилка", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Error)
