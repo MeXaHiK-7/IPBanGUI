@@ -310,6 +310,10 @@ $script:I18N = @{
         "ColUser" = "Користувач"
         "ColLogonType" = "Тип входу"
         "ColWorkstation" = "Робоча станція"
+        "ColStatus" = "Статус"
+        "MiCopyIP" = "Копіювати IP"
+        "MiUnban" = "Розблокувати"
+        "MiWhitelist" = "Додати до Білого списку (Whitelist)"
         "MiEventBan" = "Заблокувати цей IP"
         "MiEventWhite" = "Додати цей IP до Whitelist"
         "MiEventCopy" = "Копіювати IP-адресу"
@@ -341,6 +345,30 @@ $script:I18N = @{
         "SvcNotInstalled" = "Служба Windows (IPBan): Не знайдена в системі"
         "PromptInstallTitle" = "Майстер налаштувань IPBan"
         "PromptInstallText" = "Службу захисту IPBan ще не встановлено на цьому комп'ютері.`n`nВідкрито розділ «Інсталяція та Сервіс».`nДля захисту сервера від підбору паролів (RDP, SSH, SMB тощо) необхідно встановити службу IPBan.`n`nБажаєте завантажити та встановити найновішу версію IPBan прямо зараз з офіційного GitHub?"
+        "StatusLogUpdated" = "Лог IPBan оновлено ({0} останніх рядків)"
+        "StatusPollingEvents" = "Опитування журналу безпеки Windows (Event 4625)..."
+        "StatusEventsLoaded" = "Отримано невдалих спроб входу: {0}"
+        "StatusEventsError" = "Помилка читання журналу подій: {0}"
+        "LogReadError" = "Не вдалося прочитати лог-файл: {0}"
+        "LogNotFound" = "Файл логу не знайдено за шляхом: {0}`n`nЛоги з'являться після запуску служби IPBan."
+        "StatusServiceRestarting" = "Перезапуск служби IPBan..."
+        "StatusServiceRestarted" = "Службу IPBan успішно перезапущено!"
+        "StatusServiceRestartError" = "Помилка перезапуску служби"
+        "StatusServiceStarting" = "Запуск служби IPBan..."
+        "StatusServiceStarted" = "Службу IPBan запущено!"
+        "StatusServiceStopping" = "Зупинка служби IPBan..."
+        "StatusServiceStopped" = "Службу IPBan зупинено!"
+        "StatusLogCleared" = "Лог-файл успішно очищено"
+        "StatusAuditConfiguring" = "Налаштування Windows Audit Policy..."
+        "StatusGettingPublicIP" = "Отримання зовнішньої публічної IP-адреси..."
+        "StatusAbuseDownloaded" = "AbuseIPDB: Завантажено {0} шкідливих IP-адрес"
+        "StatusConfigSaved" = "Налаштування успішно збережено у {0}"
+        "StatusConfigLoaded" = "Налаштування завантажено з {0}"
+        "StatusConfigNotFound" = "Файл конфігурації не знайдено: {0}"
+        "StatusInstallLocal" = "Встановлення IPBan з локального архіву..."
+        "StatusInstallWeb" = "Завантаження та встановлення IPBan з GitHub..."
+        "StatusRulesLoading" = "Завантаження правил брандмауера IPBan..."
+        "StatusRulesRefreshed" = "Правила оновлено. Локальних блокувань: {0} | Білий список: {1} | Чорний список: {2}"
     }
     "EN" = @{
         "AppTitle" = "IPBan Manager & Control Center"
@@ -457,6 +485,10 @@ $script:I18N = @{
         "ColUser" = "User"
         "ColLogonType" = "Logon Type"
         "ColWorkstation" = "Workstation"
+        "ColStatus" = "Status"
+        "MiCopyIP" = "Copy IP"
+        "MiUnban" = "Unban"
+        "MiWhitelist" = "Add to Whitelist"
         "MiEventBan" = "Ban This IP"
         "MiEventWhite" = "Add This IP to Whitelist"
         "MiEventCopy" = "Copy IP Address"
@@ -488,6 +520,30 @@ $script:I18N = @{
         "SvcNotInstalled" = "Windows Service (IPBan): Not found in system"
         "PromptInstallTitle" = "IPBan Setup Wizard"
         "PromptInstallText" = "The IPBan protection service is not yet installed on this computer.`n`nOpened the 'Installation & Service' section.`nTo protect this server from brute-force password attacks (RDP, SSH, SMB, etc.), the IPBan service must be installed.`n`nWould you like to download and install the latest IPBan release from GitHub right now?"
+        "StatusLogUpdated" = "IPBan log updated (last {0} lines)"
+        "StatusPollingEvents" = "Querying Windows Security log (Event 4625)..."
+        "StatusEventsLoaded" = "Received failed login attempts: {0}"
+        "StatusEventsError" = "Error reading event log: {0}"
+        "LogReadError" = "Failed to read log file: {0}"
+        "LogNotFound" = "Log file not found at: {0}`n`nLogs will appear after starting IPBan service."
+        "StatusServiceRestarting" = "Restarting IPBan service..."
+        "StatusServiceRestarted" = "IPBan service successfully restarted!"
+        "StatusServiceRestartError" = "Failed to restart IPBan service"
+        "StatusServiceStarting" = "Starting IPBan service..."
+        "StatusServiceStarted" = "IPBan service started!"
+        "StatusServiceStopping" = "Stopping IPBan service..."
+        "StatusServiceStopped" = "IPBan service stopped!"
+        "StatusLogCleared" = "Log file successfully cleared"
+        "StatusAuditConfiguring" = "Configuring Windows Audit Policy..."
+        "StatusGettingPublicIP" = "Retrieving external public IP address..."
+        "StatusAbuseDownloaded" = "AbuseIPDB: Downloaded {0} malicious IP addresses"
+        "StatusConfigSaved" = "Settings successfully saved to {0}"
+        "StatusConfigLoaded" = "Settings loaded from {0}"
+        "StatusConfigNotFound" = "Configuration file not found: {0}"
+        "StatusInstallLocal" = "Installing IPBan from local archive..."
+        "StatusInstallWeb" = "Downloading and installing IPBan from GitHub..."
+        "StatusRulesLoading" = "Loading IPBan firewall rules..."
+        "StatusRulesRefreshed" = "Rules refreshed. Local bans: {0} | Whitelist: {1} | Blacklist: {2}"
     }
 }
 
@@ -1733,9 +1789,9 @@ $panelBannedFooter.Controls.Add($lblBannedCount)
 
 # Контекстне меню для таблиці заблокованих IP (без Whois, оскільки IP тепер клікабельний лінк)
 $ctxBanned = New-Object System.Windows.Forms.ContextMenuStrip
-$miCopyIP = $ctxBanned.Items.Add("Копіювати IP")
-$miUnban = $ctxBanned.Items.Add("Розблокувати")
-$miWhitelist = $ctxBanned.Items.Add("Додати до Білого списку (Whitelist)")
+$miCopyIP = $ctxBanned.Items.Add((T "MiCopyIP"))
+$miUnban = $ctxBanned.Items.Add((T "MiUnban"))
+$miWhitelist = $ctxBanned.Items.Add((T "MiWhitelist"))
 $dgvBanned.ContextMenuStrip = $ctxBanned
 Enable-DoubleBuffering $dgvBanned
 
@@ -2587,9 +2643,9 @@ $panelLogContainer.Controls.Add($dgvEventLog)
 
 # Контекстне меню для Windows Events
 $ctxEvents = New-Object System.Windows.Forms.ContextMenuStrip
-$miEventBan = $ctxEvents.Items.Add("Заблокувати цей IP")
-$miEventWhite = $ctxEvents.Items.Add("Додати цей IP до Whitelist")
-$miEventCopy = $ctxEvents.Items.Add("Копіювати IP-адресу")
+$miEventBan = $ctxEvents.Items.Add((T "MiEventBan"))
+$miEventWhite = $ctxEvents.Items.Add((T "MiEventWhite"))
+$miEventCopy = $ctxEvents.Items.Add((T "MiEventCopy"))
 $dgvEventLog.ContextMenuStrip = $ctxEvents
 
 # ==============================================================================
@@ -2748,17 +2804,17 @@ $statusStrip.Dock = [System.Windows.Forms.DockStyle]::Fill
 $mainLayout.Controls.Add($statusStrip, 0, 3)
 
 $statusLabel = New-Object System.Windows.Forms.ToolStripStatusLabel
-$statusLabel.Text = "Готово"
+$statusLabel.Text = (T "StatusReady")
 $statusLabel.Spring = $true
 $statusLabel.TextAlign = [System.Drawing.ContentAlignment]::MiddleLeft
 [void]$statusStrip.Items.Add($statusLabel)
 
 $statusAdmin = New-Object System.Windows.Forms.ToolStripStatusLabel
 if ($script:IsAdmin) {
-    $statusAdmin.Text = "Адміністратор"
+    $statusAdmin.Text = (T "AdminYes")
     $statusAdmin.ForeColor = [System.Drawing.Color]::FromArgb(22, 101, 52)
 } else {
-    $statusAdmin.Text = "Без прав адміністратора"
+    $statusAdmin.Text = (T "AdminNo")
     $statusAdmin.ForeColor = [System.Drawing.Color]::FromArgb(185, 28, 28)
 }
 [void]$statusStrip.Items.Add($statusAdmin)
@@ -2804,6 +2860,7 @@ function Update-UILanguage {
     $btnUnbanAll.Text = T "BtnUnbanAll"
     $btnExportBanned.Text = T "BtnExport"
 
+    if ($dgvBanned.Columns["Index"]) { $dgvBanned.Columns["Index"].HeaderText = T "ColIndex" }
     if ($dgvBanned.Columns["IPAddress"]) { $dgvBanned.Columns["IPAddress"].HeaderText = T "ColIP" }
     if ($dgvBanned.Columns["Country"]) { $dgvBanned.Columns["Country"].HeaderText = T "ColCountry" }
     if ($dgvBanned.Columns["BanDate"]) { $dgvBanned.Columns["BanDate"].HeaderText = T "ColBanTime" }
@@ -2890,9 +2947,13 @@ function Update-UILanguage {
     if ($dgvEventLog.Columns["Workstation"]) { $dgvEventLog.Columns["Workstation"].HeaderText = T "ColWorkstation" }
     if ($dgvEventLog.Columns["Status"]) { $dgvEventLog.Columns["Status"].HeaderText = T "ColStatus" }
 
-    $miEventBan.Text = T "MiEventBan"
-    $miEventWhite.Text = T "MiEventWhite"
-    $miEventCopy.Text = T "MiEventCopy"
+    if ($miCopyIP) { $miCopyIP.Text = T "MiCopyIP" }
+    if ($miUnban) { $miUnban.Text = T "MiUnban" }
+    if ($miWhitelist) { $miWhitelist.Text = T "MiWhitelist" }
+
+    if ($miEventBan) { $miEventBan.Text = T "MiEventBan" }
+    if ($miEventWhite) { $miEventWhite.Text = T "MiEventWhite" }
+    if ($miEventCopy) { $miEventCopy.Text = T "MiEventCopy" }
 
     $gbSysStatus.Text = T "GbSysStatus"
     $btnBrowseZip.Text = T "BtnBrowseZip"
@@ -2910,6 +2971,7 @@ function Update-UILanguage {
     $statusLabel.Text = T "StatusReady"
     $statusAdmin.Text = if ($script:IsAdmin) { T "AdminYes" } else { T "AdminNo" }
 
+    if ($script:tmiTitle) { $script:tmiTitle.Text = T "TrayTitle" }
     if ($script:tmiStart) { $script:tmiStart.Text = T "TrayStart" }
     if ($script:tmiStop) { $script:tmiStop.Text = T "TrayStop" }
     if ($script:tmiRestart) { $script:tmiRestart.Text = T "TrayRestart" }
@@ -2940,9 +3002,9 @@ function Init-Tray {
     $script:TrayMenu = New-Object System.Windows.Forms.ContextMenuStrip
     $script:TrayMenu.Font = New-Object System.Drawing.Font("Segoe UI", 9)
 
-    $tmiTitle = $script:TrayMenu.Items.Add((T "TrayTitle"))
-    $tmiTitle.Font = New-Object System.Drawing.Font("Segoe UI", 9.5, [System.Drawing.FontStyle]::Bold)
-    $tmiTitle.Enabled = $false
+    $script:tmiTitle = $script:TrayMenu.Items.Add((T "TrayTitle"))
+    $script:tmiTitle.Font = New-Object System.Drawing.Font("Segoe UI", 9.5, [System.Drawing.FontStyle]::Bold)
+    $script:tmiTitle.Enabled = $false
 
     [void]$script:TrayMenu.Items.Add("-")
 
@@ -3209,7 +3271,7 @@ function Update-ServiceUI {
 }
 
 function Refresh-BannedIPs {
-    $statusLabel.Text = if ($script:CurrentLang -eq "EN") { "Loading IPBan firewall rules..." } else { "Завантаження правил брандмауера IPBan..." }
+    $statusLabel.Text = T "StatusRulesLoading"
     $form.Cursor = [System.Windows.Forms.Cursors]::WaitCursor
     try {
         $script:LastBannedIPs = Get-FirewallBannedIPs
@@ -3221,7 +3283,7 @@ function Refresh-BannedIPs {
         $blockCount = @($script:LastBannedIPs | Where-Object { $_.ActionType -eq "Block" }).Count
         $allowCount = @($script:LastBannedIPs | Where-Object { $_.ActionType -eq "Allow" }).Count
         $blackCount = @($script:LastBannedIPs | Where-Object { $_.ActionType -eq "Blacklist" }).Count
-        $statusLabel.Text = if ($script:CurrentLang -eq "EN") { "Rules refreshed. Local bans: $blockCount | Whitelist: $allowCount | Blacklist: $blackCount" } else { "Правила оновлено. Локальних блокувань: $blockCount | Білий список: $allowCount | Чорний список: $blackCount" }
+        $statusLabel.Text = [string]::Format((T "StatusRulesRefreshed"), $blockCount, $allowCount, $blackCount)
 
         # Перевірка на новий бан для тривоги (Alert) - тільки локальні блокування!
         if ($script:PreviousBannedCount -ge 0 -and $blockCount -gt $script:PreviousBannedCount) {
@@ -3698,7 +3760,7 @@ function Load-ConfigData {
 
     $configFile = Get-IPBanConfigFile
     if (-not (Test-Path $configFile)) {
-        $statusLabel.Text = "Файл конфігурації не знайдено: $configFile"
+        $statusLabel.Text = [string]::Format((T "StatusConfigNotFound"), $configFile)
         return
     }
 
@@ -3815,7 +3877,7 @@ function Load-ConfigData {
             } catch {}
         }
 
-        $statusLabel.Text = "Налаштування завантажено з $([System.IO.Path]::GetFileName($configFile))"
+        $statusLabel.Text = [string]::Format((T "StatusConfigLoaded"), [System.IO.Path]::GetFileName($configFile))
     } catch {
         [System.Windows.Forms.MessageBox]::Show("Помилка читання конфігурації: $_", "Помилка", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Error)
     }
@@ -4146,7 +4208,7 @@ function Save-ConfigData {
 
         $xml.Save($configFile)
         Save-PersistentAppSettings
-        $statusLabel.Text = "Налаштування успішно збережено у $configFile"
+        $statusLabel.Text = [string]::Format((T "StatusConfigSaved"), $configFile)
 
         $resp = [System.Windows.Forms.MessageBox]::Show("Налаштування збережено у файл:`n$configFile`n`nБажаєте перезапустити службу IPBan зараз, щоб застосувати зміни?", "Збережено", [System.Windows.Forms.MessageBoxButtons]::YesNo, [System.Windows.Forms.MessageBoxIcon]::Question)
         if ($resp -eq [System.Windows.Forms.DialogResult]::Yes) {
@@ -4169,17 +4231,17 @@ function Refresh-LogsView {
                 $txtIPBanLog.Text = ($lines -join "`r`n")
                 $txtIPBanLog.SelectionStart = $txtIPBanLog.Text.Length
                 $txtIPBanLog.ScrollToCaret()
-                $statusLabel.Text = "Лог IPBan оновлено ($($lines.Count) останніх рядків)"
+                $statusLabel.Text = [string]::Format((T "StatusLogUpdated"), $lines.Count)
             } catch {
-                $txtIPBanLog.Text = "Не вдалося прочитати лог-файл: $_"
+                $txtIPBanLog.Text = [string]::Format((T "LogReadError"), $_)
             }
         } else {
-            $txtIPBanLog.Text = "Файл логу не знайдено за шляхом: $logFile`n`nЛоги з'являться після запуску служби IPBan."
+            $txtIPBanLog.Text = [string]::Format((T "LogNotFound"), $logFile)
         }
     } else {
         $txtIPBanLog.Visible = $false
         $dgvEventLog.Visible = $true
-        $statusLabel.Text = "Опитування журналу безпеки Windows (Event 4625)..."
+        $statusLabel.Text = T "StatusPollingEvents"
         $form.Cursor = [System.Windows.Forms.Cursors]::WaitCursor
         try {
             $events = Get-WindowsFailedLogins -maxEvents 50
@@ -4194,9 +4256,9 @@ function Refresh-LogsView {
                     $e.Status
                 )
             }
-            $statusLabel.Text = "Отримано невдалих спроб входу: $($events.Count)"
+            $statusLabel.Text = [string]::Format((T "StatusEventsLoaded"), $events.Count)
         } catch {
-            $statusLabel.Text = "Помилка читання журналу подій: $_"
+            $statusLabel.Text = [string]::Format((T "StatusEventsError"), $_)
         } finally {
             $form.Cursor = [System.Windows.Forms.Cursors]::Default
         }
@@ -4204,16 +4266,16 @@ function Refresh-LogsView {
 }
 
 function Restart-ServiceAction {
-    $statusLabel.Text = "Перезапуск служби IPBan..."
+    $statusLabel.Text = T "StatusServiceRestarting"
     $form.Cursor = [System.Windows.Forms.Cursors]::WaitCursor
     try {
         Restart-Service -Name $script:ServiceName -Force -ErrorAction Stop
         Start-Sleep -Seconds 1
         Update-ServiceUI
-        $statusLabel.Text = "Службу IPBan успішно перезапущено!"
+        $statusLabel.Text = T "StatusServiceRestarted"
     } catch {
         [System.Windows.Forms.MessageBox]::Show("Помилка перезапуску служби: $_", "Помилка", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Error)
-        $statusLabel.Text = "Помилка перезапуску служби"
+        $statusLabel.Text = T "StatusServiceRestartError"
     } finally {
         $form.Cursor = [System.Windows.Forms.Cursors]::Default
     }
@@ -4226,11 +4288,11 @@ function Restart-ServiceAction {
 # Кнопки Header
 $btnStartService.Add_Click({
     try {
-        $statusLabel.Text = "Запуск служби IPBan..."
+        $statusLabel.Text = T "StatusServiceStarting"
         Start-Service -Name $script:ServiceName -ErrorAction Stop
         Start-Sleep -Seconds 1
         Update-ServiceUI
-        $statusLabel.Text = "Службу IPBan запущено!"
+        $statusLabel.Text = T "StatusServiceStarted"
     } catch {
         [System.Windows.Forms.MessageBox]::Show("Не вдалося запустити службу: $_", "Помилка", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Error)
     }
@@ -4238,11 +4300,11 @@ $btnStartService.Add_Click({
 
 $btnStopService.Add_Click({
     try {
-        $statusLabel.Text = "Зупинка служби IPBan..."
+        $statusLabel.Text = T "StatusServiceStopping"
         Stop-Service -Name $script:ServiceName -Force -ErrorAction Stop
         Start-Sleep -Seconds 1
         Update-ServiceUI
-        $statusLabel.Text = "Службу IPBan зупинено!"
+        $statusLabel.Text = T "StatusServiceStopped"
     } catch {
         [System.Windows.Forms.MessageBox]::Show("Не вдалося зупинити службу: $_", "Помилка", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Error)
     }
@@ -4454,10 +4516,14 @@ $miWhitelist.Add_Click({
         $current = $txtWhitelist.Text.Trim()
         if ($current -notmatch [regex]::Escape($ip)) {
             if ($current) { $txtWhitelist.Text += "`r`n$ip" } else { $txtWhitelist.Text = $ip }
-            [System.Windows.Forms.MessageBox]::Show("IP-адресу $ip додано до вкладки 'Білий список'. Не забудьте натиснути 'Зберегти' на вкладці списків!", "Додано", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Information)
+            $msg = if ($script:CurrentLang -eq "EN") { "IP address $ip added to 'Whitelist' tab. Remember to click 'Save' on the lists tab!" } else { "IP-адресу $ip додано до вкладки 'Білий список'. Не забудьте натиснути 'Зберегти' на вкладці списків!" }
+            $title = if ($script:CurrentLang -eq "EN") { "Added" } else { "Додано" }
+            [System.Windows.Forms.MessageBox]::Show($msg, $title, [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Information)
             $tabControl.SelectedTab = $tabLists
         } else {
-            [System.Windows.Forms.MessageBox]::Show("IP $ip вже присутня у білому списку.", "Інформація", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Information)
+            $msg = if ($script:CurrentLang -eq "EN") { "IP $ip is already in the whitelist." } else { "IP $ip вже присутня у білому списку." }
+            $title = if ($script:CurrentLang -eq "EN") { "Information" } else { "Інформація" }
+            [System.Windows.Forms.MessageBox]::Show($msg, $title, [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Information)
         }
     }
 })
@@ -4521,7 +4587,7 @@ $btnFetchAbuse.Add_Click({
 
             $txtBlacklist.Text = ($blackSet -join "`r`n")
             $lblAbuseStatus.Text = "✅ Отримано: $($lines.Count) IP (Нових додано: $newCount)"
-            $statusLabel.Text = "AbuseIPDB: Завантажено $($lines.Count) шкідливих IP-адрес"
+            $statusLabel.Text = [string]::Format((T "StatusAbuseDownloaded"), $lines.Count)
 
             # Зберігаємо оновлений API ключ та налаштування
             try {
@@ -4583,7 +4649,7 @@ $btnAddLocalIP.Add_Click({
 
 $btnAddPublicIP.Add_Click({
     $btnAddPublicIP.Enabled = $false
-    $statusLabel.Text = "Отримання зовнішньої публічної IP-адреси..."
+    $statusLabel.Text = T "StatusGettingPublicIP"
     try {
         $wanIP = (Invoke-RestMethod -Uri "https://api.ipify.org" -TimeoutSec 3).Trim()
         if ($wanIP -and $wanIP -match '^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$') {
@@ -4598,7 +4664,7 @@ $btnAddPublicIP.Add_Click({
         [System.Windows.Forms.MessageBox]::Show("Не вдалося автоматично визначити зовнішню IP: $_", "Увага", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Warning)
     } finally {
         $btnAddPublicIP.Enabled = $true
-        $statusLabel.Text = "Готово"
+        $statusLabel.Text = T "StatusReady"
     }
 })
 
@@ -4620,7 +4686,7 @@ $btnClearLog.Add_Click({
             try {
                 Clear-Content -Path $logFile -Force
                 $txtIPBanLog.Text = ""
-                $statusLabel.Text = "Лог-файл успішно очищено"
+                $statusLabel.Text = T "StatusLogCleared"
             } catch {
                 [System.Windows.Forms.MessageBox]::Show("Не вдалося очистити лог: $_", "Помилка", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Error)
             }
@@ -4675,7 +4741,7 @@ $chkAutoRefreshLog.Add_CheckedChanged({
 
 # Tab 5: Setup & Maintenance
 $btnSetupAudit.Add_Click({
-    $statusLabel.Text = "Налаштування Windows Audit Policy..."
+    $statusLabel.Text = T "StatusAuditConfiguring"
     $form.Cursor = [System.Windows.Forms.Cursors]::WaitCursor
     try {
         & auditpol.exe /set /category:"{69979849-797A-11D9-BED3-505054503030}" /success:enable /failure:enable
@@ -4686,7 +4752,7 @@ $btnSetupAudit.Add_Click({
         [System.Windows.Forms.MessageBox]::Show("Помилка налаштування аудиту: $_`nПереконайтеся, що програму запущено з правами адміністратора.", "Помилка", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Error)
     } finally {
         $form.Cursor = [System.Windows.Forms.Cursors]::Default
-        $statusLabel.Text = "Готово"
+        $statusLabel.Text = T "StatusReady"
     }
 })
 
@@ -4718,7 +4784,7 @@ $btnInstallLocal.Add_Click({
     $confirm = [System.Windows.Forms.MessageBox]::Show("Встановити IPBan з архіву:`n`"$zipPath`"`nу папку:`n`"$destPath`"?`n`nБуде налаштовано службу IPBan та аудит Windows.", "Підтвердження інсталяції", [System.Windows.Forms.MessageBoxButtons]::YesNo, [System.Windows.Forms.MessageBoxIcon]::Question)
     if ($confirm -ne [System.Windows.Forms.DialogResult]::Yes) { return }
 
-    $statusLabel.Text = "Встановлення IPBan з локального архіву..."
+    $statusLabel.Text = T "StatusInstallLocal"
     $form.Cursor = [System.Windows.Forms.Cursors]::WaitCursor
     try {
         Install-IPBanFromArchive -zipPath $zipPath -destPath $destPath
@@ -4732,7 +4798,7 @@ $btnInstallLocal.Add_Click({
         [System.Windows.Forms.MessageBox]::Show("Помилка під час встановлення: $_", "Помилка", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Error)
     } finally {
         $form.Cursor = [System.Windows.Forms.Cursors]::Default
-        $statusLabel.Text = "Готово"
+        $statusLabel.Text = T "StatusReady"
     }
 })
 
@@ -4787,7 +4853,7 @@ $btnInstallWeb.Add_Click({
     $dlg.Show($form)
     [System.Windows.Forms.Application]::DoEvents()
 
-    $statusLabel.Text = "Завантаження та встановлення IPBan з GitHub..."
+    $statusLabel.Text = T "StatusInstallWeb"
     $form.Cursor = [System.Windows.Forms.Cursors]::WaitCursor
 
     try {
@@ -4905,7 +4971,7 @@ $btnInstallWeb.Add_Click({
     } finally {
         if ($dlg) { $dlg.Dispose() }
         $form.Cursor = [System.Windows.Forms.Cursors]::Default
-        $statusLabel.Text = "Готово"
+        $statusLabel.Text = T "StatusReady"
     }
 })
 
