@@ -317,6 +317,7 @@ $script:I18N = @{
         "BtnRefreshLog" = "Оновити журнал"
         "ChkAutoRefresh" = "Авто (кожні 5 сек)"
         "BtnClearLog" = "Очистити logfile.txt"
+        "ChkWordWrap" = "Перенос рядків"
         "ColTime" = "Час"
         "ColUser" = "Користувач"
         "ColLogonType" = "Тип входу"
@@ -493,6 +494,7 @@ $script:I18N = @{
         "BtnRefreshLog" = "Refresh Log"
         "ChkAutoRefresh" = "Auto (every 5 sec)"
         "BtnClearLog" = "Clear logfile.txt"
+        "ChkWordWrap" = "Word Wrap"
         "ColTime" = "Time"
         "ColUser" = "User"
         "ColLogonType" = "Logon Type"
@@ -1851,7 +1853,7 @@ $layoutStats = New-Object System.Windows.Forms.TableLayoutPanel
 $layoutStats.Dock = [System.Windows.Forms.DockStyle]::Fill
 $layoutStats.RowCount = 3
 $layoutStats.ColumnCount = 1
-$layoutStats.RowStyles.Add((New-Object System.Windows.Forms.RowStyle([System.Windows.Forms.SizeType]::Absolute, 86)))
+$layoutStats.RowStyles.Add((New-Object System.Windows.Forms.RowStyle([System.Windows.Forms.SizeType]::Absolute, 98)))
 $layoutStats.RowStyles.Add((New-Object System.Windows.Forms.RowStyle([System.Windows.Forms.SizeType]::Percent, 100)))
 $layoutStats.RowStyles.Add((New-Object System.Windows.Forms.RowStyle([System.Windows.Forms.SizeType]::Absolute, 40)))
 $tabStats.Controls.Add($layoutStats)
@@ -1865,7 +1867,7 @@ $panelKpis.ColumnStyles.Add((New-Object System.Windows.Forms.ColumnStyle([System
 $panelKpis.ColumnStyles.Add((New-Object System.Windows.Forms.ColumnStyle([System.Windows.Forms.SizeType]::Percent, 25)))
 $panelKpis.ColumnStyles.Add((New-Object System.Windows.Forms.ColumnStyle([System.Windows.Forms.SizeType]::Percent, 25)))
 $panelKpis.ColumnStyles.Add((New-Object System.Windows.Forms.ColumnStyle([System.Windows.Forms.SizeType]::Percent, 25)))
-$panelKpis.Padding = New-Object System.Windows.Forms.Padding(8, 4, 8, 4)
+$panelKpis.Padding = New-Object System.Windows.Forms.Padding(8, 4, 8, 6)
 $layoutStats.Controls.Add($panelKpis, 0, 0)
 
 # Card 1: Всього заблоковано
@@ -1873,7 +1875,7 @@ $cardTotalBanned = New-Object System.Windows.Forms.Panel
 $cardTotalBanned.Dock = [System.Windows.Forms.DockStyle]::Fill
 $cardTotalBanned.BackColor = [System.Drawing.Color]::FromArgb(239, 246, 255)
 $cardTotalBanned.BorderStyle = [System.Windows.Forms.BorderStyle]::FixedSingle
-$cardTotalBanned.Margin = New-Object System.Windows.Forms.Padding(3)
+$cardTotalBanned.Margin = New-Object System.Windows.Forms.Padding(4, 3, 4, 5)
 $cardTotalBanned.Padding = New-Object System.Windows.Forms.Padding(8, 6, 8, 4)
 
 $lblCardTotalBannedTitle = New-Object System.Windows.Forms.Label
@@ -1887,7 +1889,7 @@ $lblCardTotalBannedVal = New-Object System.Windows.Forms.Label
 $lblCardTotalBannedVal.Text = "0"
 $lblCardTotalBannedVal.Font = New-Object System.Drawing.Font("Segoe UI", 15, [System.Drawing.FontStyle]::Bold)
 $lblCardTotalBannedVal.ForeColor = [System.Drawing.Color]::FromArgb(30, 64, 175)
-$lblCardTotalBannedVal.Location = New-Object System.Drawing.Point(8, 28)
+$lblCardTotalBannedVal.Location = New-Object System.Drawing.Point(8, 26)
 $lblCardTotalBannedVal.AutoSize = $true
 
 $cardTotalBanned.Controls.Add($lblCardTotalBannedVal)
@@ -1899,7 +1901,7 @@ $cardUniqueCountries = New-Object System.Windows.Forms.Panel
 $cardUniqueCountries.Dock = [System.Windows.Forms.DockStyle]::Fill
 $cardUniqueCountries.BackColor = [System.Drawing.Color]::FromArgb(236, 253, 245)
 $cardUniqueCountries.BorderStyle = [System.Windows.Forms.BorderStyle]::FixedSingle
-$cardUniqueCountries.Margin = New-Object System.Windows.Forms.Padding(3)
+$cardUniqueCountries.Margin = New-Object System.Windows.Forms.Padding(4, 3, 4, 5)
 $cardUniqueCountries.Padding = New-Object System.Windows.Forms.Padding(8, 6, 8, 4)
 
 $lblCardUniqueCountriesTitle = New-Object System.Windows.Forms.Label
@@ -1913,7 +1915,7 @@ $lblCardUniqueCountriesVal = New-Object System.Windows.Forms.Label
 $lblCardUniqueCountriesVal.Text = "0"
 $lblCardUniqueCountriesVal.Font = New-Object System.Drawing.Font("Segoe UI", 15, [System.Drawing.FontStyle]::Bold)
 $lblCardUniqueCountriesVal.ForeColor = [System.Drawing.Color]::FromArgb(6, 95, 70)
-$lblCardUniqueCountriesVal.Location = New-Object System.Drawing.Point(8, 28)
+$lblCardUniqueCountriesVal.Location = New-Object System.Drawing.Point(8, 26)
 $lblCardUniqueCountriesVal.AutoSize = $true
 
 $cardUniqueCountries.Controls.Add($lblCardUniqueCountriesVal)
@@ -1925,7 +1927,7 @@ $cardTopCountry = New-Object System.Windows.Forms.Panel
 $cardTopCountry.Dock = [System.Windows.Forms.DockStyle]::Fill
 $cardTopCountry.BackColor = [System.Drawing.Color]::FromArgb(255, 241, 242)
 $cardTopCountry.BorderStyle = [System.Windows.Forms.BorderStyle]::FixedSingle
-$cardTopCountry.Margin = New-Object System.Windows.Forms.Padding(3)
+$cardTopCountry.Margin = New-Object System.Windows.Forms.Padding(4, 3, 4, 5)
 $cardTopCountry.Padding = New-Object System.Windows.Forms.Padding(8, 6, 8, 4)
 
 $lblCardTopCountryTitle = New-Object System.Windows.Forms.Label
@@ -1939,11 +1941,11 @@ $lblCardTopCountryVal = New-Object System.Windows.Forms.Label
 $lblCardTopCountryVal.Text = "—"
 $lblCardTopCountryVal.Font = New-Object System.Drawing.Font("Segoe UI", 11.5, [System.Drawing.FontStyle]::Bold)
 $lblCardTopCountryVal.ForeColor = [System.Drawing.Color]::FromArgb(159, 18, 57)
-$lblCardTopCountryVal.Location = New-Object System.Drawing.Point(8, 28)
-$lblCardTopCountryVal.Size = New-Object System.Drawing.Size(240, 36)
+$lblCardTopCountryVal.Location = New-Object System.Drawing.Point(8, 26)
+$lblCardTopCountryVal.Size = New-Object System.Drawing.Size(220, 52)
 $lblCardTopCountryVal.TextAlign = [System.Drawing.ContentAlignment]::TopLeft
 $lblCardTopCountryVal.AutoEllipsis = $true
-$lblCardTopCountryVal.Anchor = ([System.Windows.Forms.AnchorStyles]::Top -bor [System.Windows.Forms.AnchorStyles]::Left -bor [System.Windows.Forms.AnchorStyles]::Right)
+$lblCardTopCountryVal.Anchor = ([System.Windows.Forms.AnchorStyles]::Top -bor [System.Windows.Forms.AnchorStyles]::Left -bor [System.Windows.Forms.AnchorStyles]::Right -bor [System.Windows.Forms.AnchorStyles]::Bottom)
 
 $cardTopCountry.Controls.Add($lblCardTopCountryVal)
 $cardTopCountry.Controls.Add($lblCardTopCountryTitle)
@@ -1954,7 +1956,7 @@ $cardPeakHour = New-Object System.Windows.Forms.Panel
 $cardPeakHour.Dock = [System.Windows.Forms.DockStyle]::Fill
 $cardPeakHour.BackColor = [System.Drawing.Color]::FromArgb(255, 251, 235)
 $cardPeakHour.BorderStyle = [System.Windows.Forms.BorderStyle]::FixedSingle
-$cardPeakHour.Margin = New-Object System.Windows.Forms.Padding(3)
+$cardPeakHour.Margin = New-Object System.Windows.Forms.Padding(4, 3, 4, 5)
 $cardPeakHour.Padding = New-Object System.Windows.Forms.Padding(8, 6, 8, 4)
 
 $lblCardPeakHourTitle = New-Object System.Windows.Forms.Label
@@ -1968,8 +1970,11 @@ $lblCardPeakHourVal = New-Object System.Windows.Forms.Label
 $lblCardPeakHourVal.Text = "—"
 $lblCardPeakHourVal.Font = New-Object System.Drawing.Font("Segoe UI", 12.5, [System.Drawing.FontStyle]::Bold)
 $lblCardPeakHourVal.ForeColor = [System.Drawing.Color]::FromArgb(146, 64, 14)
-$lblCardPeakHourVal.Location = New-Object System.Drawing.Point(8, 28)
-$lblCardPeakHourVal.AutoSize = $true
+$lblCardPeakHourVal.Location = New-Object System.Drawing.Point(8, 26)
+$lblCardPeakHourVal.Size = New-Object System.Drawing.Size(220, 52)
+$lblCardPeakHourVal.TextAlign = [System.Drawing.ContentAlignment]::TopLeft
+$lblCardPeakHourVal.AutoEllipsis = $true
+$lblCardPeakHourVal.Anchor = ([System.Windows.Forms.AnchorStyles]::Top -bor [System.Windows.Forms.AnchorStyles]::Left -bor [System.Windows.Forms.AnchorStyles]::Right -bor [System.Windows.Forms.AnchorStyles]::Bottom)
 
 $cardPeakHour.Controls.Add($lblCardPeakHourVal)
 $cardPeakHour.Controls.Add($lblCardPeakHourTitle)
@@ -2030,18 +2035,19 @@ $gbTimeStats.Text = (T "GbTimeStats")
 $gbTimeStats.Dock = [System.Windows.Forms.DockStyle]::Fill
 $gbTimeStats.Font = New-Object System.Drawing.Font("Segoe UI", 9.5, [System.Drawing.FontStyle]::Bold)
 $gbTimeStats.ForeColor = [System.Drawing.Color]::FromArgb(30, 41, 59)
-$gbTimeStats.Padding = New-Object System.Windows.Forms.Padding(6)
+$gbTimeStats.Padding = New-Object System.Windows.Forms.Padding(8, 22, 8, 8)
 $panelStatsBody.Controls.Add($gbTimeStats, 1, 0)
 
 $lblPeakBanner = New-Object System.Windows.Forms.Label
 $lblPeakBanner.Dock = [System.Windows.Forms.DockStyle]::Top
-$lblPeakBanner.Height = 28
+$lblPeakBanner.Height = 34
 $lblPeakBanner.BackColor = [System.Drawing.Color]::FromArgb(254, 242, 242)
 $lblPeakBanner.ForeColor = [System.Drawing.Color]::FromArgb(185, 28, 28)
 $lblPeakBanner.Font = New-Object System.Drawing.Font("Segoe UI", 8.5, [System.Drawing.FontStyle]::Bold)
-$lblPeakBanner.Padding = New-Object System.Windows.Forms.Padding(4)
+$lblPeakBanner.Padding = New-Object System.Windows.Forms.Padding(6, 4, 6, 4)
 $lblPeakBanner.Visible = $false
 $lblPeakBanner.TextAlign = [System.Drawing.ContentAlignment]::MiddleLeft
+$lblPeakBanner.AutoEllipsis = $true
 
 $dgvTimeStats = New-Object System.Windows.Forms.DataGridView
 $dgvTimeStats.Dock = [System.Windows.Forms.DockStyle]::Fill
@@ -2611,47 +2617,81 @@ $layoutLogs.RowStyles.Add((New-Object System.Windows.Forms.RowStyle([System.Wind
 $layoutLogs.RowStyles.Add((New-Object System.Windows.Forms.RowStyle([System.Windows.Forms.SizeType]::Percent, 100)))
 $tabLogs.Controls.Add($layoutLogs)
 
-# Панель перемикання та кнопок логів
-$panelLogsHeader = New-Object System.Windows.Forms.Panel
+# Панель перемикання та кнопок логів (FlowLayoutPanel для адаптивності при зміні розміру)
+$panelLogsHeader = New-Object System.Windows.Forms.FlowLayoutPanel
 $panelLogsHeader.Dock = [System.Windows.Forms.DockStyle]::Fill
-$panelLogsHeader.Padding = New-Object System.Windows.Forms.Padding(10, 8, 10, 5)
+$panelLogsHeader.Padding = New-Object System.Windows.Forms.Padding(6, 6, 6, 2)
+$panelLogsHeader.WrapContents = $false
+$panelLogsHeader.AutoScroll = $false
 $layoutLogs.Controls.Add($panelLogsHeader, 0, 0)
 
 $rbIPBanLog = New-Object System.Windows.Forms.RadioButton
-$rbIPBanLog.Text = "Лог IPBan (logfile.txt)"
+$rbIPBanLog.Text = (T "RbIPBanLog")
 $rbIPBanLog.Checked = $true
 $rbIPBanLog.Font = New-Object System.Drawing.Font("Segoe UI", 9, [System.Drawing.FontStyle]::Bold)
-$rbIPBanLog.Location = New-Object System.Drawing.Point(10, 10)
 $rbIPBanLog.AutoSize = $true
+$rbIPBanLog.Margin = New-Object System.Windows.Forms.Padding(3, 7, 6, 3)
 $panelLogsHeader.Controls.Add($rbIPBanLog)
 
 $rbEventLog = New-Object System.Windows.Forms.RadioButton
-$rbEventLog.Text = "Спроби входу Windows (Security 4625)"
+$rbEventLog.Text = (T "RbEventLog")
 $rbEventLog.Font = New-Object System.Drawing.Font("Segoe UI", 9, [System.Drawing.FontStyle]::Bold)
-$rbEventLog.Location = New-Object System.Drawing.Point(200, 10)
 $rbEventLog.AutoSize = $true
+$rbEventLog.Margin = New-Object System.Windows.Forms.Padding(3, 7, 10, 3)
 $panelLogsHeader.Controls.Add($rbEventLog)
 
 $btnRefreshLog = New-Object System.Windows.Forms.Button
-$btnRefreshLog.Text = "Оновити журнал"
-$btnRefreshLog.Location = New-Object System.Drawing.Point(470, 8)
-$btnRefreshLog.Size = New-Object System.Drawing.Size(140, 28)
+$btnRefreshLog.Text = (T "BtnRefreshLog")
+$btnRefreshLog.Size = New-Object System.Drawing.Size(125, 28)
+$btnRefreshLog.Margin = New-Object System.Windows.Forms.Padding(3, 4, 4, 3)
 $panelLogsHeader.Controls.Add($btnRefreshLog)
 
 $chkAutoRefreshLog = New-Object System.Windows.Forms.CheckBox
-$chkAutoRefreshLog.Text = "Авто (кожні 5 сек)"
-$chkAutoRefreshLog.Location = New-Object System.Drawing.Point(620, 12)
+$chkAutoRefreshLog.Text = (T "ChkAutoRefresh")
 $chkAutoRefreshLog.AutoSize = $true
+$chkAutoRefreshLog.Margin = New-Object System.Windows.Forms.Padding(4, 7, 8, 3)
 $panelLogsHeader.Controls.Add($chkAutoRefreshLog)
 
 $btnClearLog = New-Object System.Windows.Forms.Button
-$btnClearLog.Text = "Очистити logfile.txt"
-$btnClearLog.Location = New-Object System.Drawing.Point(780, 8)
-$btnClearLog.Size = New-Object System.Drawing.Size(160, 28)
+$btnClearLog.Text = (T "BtnClearLog")
+$btnClearLog.Size = New-Object System.Drawing.Size(135, 28)
+$btnClearLog.Margin = New-Object System.Windows.Forms.Padding(3, 4, 10, 3)
 $panelLogsHeader.Controls.Add($btnClearLog)
+
+$chkWordWrapLog = New-Object System.Windows.Forms.CheckBox
+$chkWordWrapLog.Text = (T "ChkWordWrap")
+$chkWordWrapLog.Checked = $true
+$chkWordWrapLog.AutoSize = $true
+$chkWordWrapLog.Margin = New-Object System.Windows.Forms.Padding(4, 7, 8, 3)
+$panelLogsHeader.Controls.Add($chkWordWrapLog)
+
+$btnZoomOutLog = New-Object System.Windows.Forms.Button
+$btnZoomOutLog.Text = "A-"
+$btnZoomOutLog.Font = New-Object System.Drawing.Font("Segoe UI", 8.5, [System.Drawing.FontStyle]::Bold)
+$btnZoomOutLog.Size = New-Object System.Drawing.Size(32, 28)
+$btnZoomOutLog.Margin = New-Object System.Windows.Forms.Padding(2, 4, 1, 3)
+$panelLogsHeader.Controls.Add($btnZoomOutLog)
+
+$lblZoomLog = New-Object System.Windows.Forms.Label
+$lblZoomLog.Text = "100%"
+$lblZoomLog.Font = New-Object System.Drawing.Font("Segoe UI", 8.5)
+$lblZoomLog.TextAlign = [System.Drawing.ContentAlignment]::MiddleCenter
+$lblZoomLog.Size = New-Object System.Drawing.Size(42, 28)
+$lblZoomLog.Margin = New-Object System.Windows.Forms.Padding(1, 4, 1, 3)
+$lblZoomLog.Cursor = [System.Windows.Forms.Cursors]::Hand
+$panelLogsHeader.Controls.Add($lblZoomLog)
+
+$btnZoomInLog = New-Object System.Windows.Forms.Button
+$btnZoomInLog.Text = "A+"
+$btnZoomInLog.Font = New-Object System.Drawing.Font("Segoe UI", 8.5, [System.Drawing.FontStyle]::Bold)
+$btnZoomInLog.Size = New-Object System.Drawing.Size(32, 28)
+$btnZoomInLog.Margin = New-Object System.Windows.Forms.Padding(1, 4, 3, 3)
+$panelLogsHeader.Controls.Add($btnZoomInLog)
 
 Set-SmoothButton $btnRefreshLog 6
 Set-SmoothButton $btnClearLog 6
+Set-SmoothButton $btnZoomOutLog 5
+Set-SmoothButton $btnZoomInLog 5
 
 # Контейнер для вмісту логів: або текстове поле, або таблиця Windows Event
 $panelLogContainer = New-Object System.Windows.Forms.Panel
@@ -2665,6 +2705,8 @@ $txtIPBanLog.Font = New-Object System.Drawing.Font("Consolas", 9.5)
 $txtIPBanLog.BackColor = [System.Drawing.Color]::FromArgb(15, 23, 42)
 $txtIPBanLog.ForeColor = [System.Drawing.Color]::FromArgb(226, 232, 240)
 $txtIPBanLog.BorderStyle = [System.Windows.Forms.BorderStyle]::None
+$txtIPBanLog.WordWrap = $true
+$txtIPBanLog.ScrollBars = [System.Windows.Forms.RichTextBoxScrollBars]::Both
 $panelLogContainer.Controls.Add($txtIPBanLog)
 
 $dgvEventLog = New-Object System.Windows.Forms.DataGridView
@@ -2982,6 +3024,7 @@ function Update-UILanguage {
     $btnRefreshLog.Text = T "BtnRefreshLog"
     $chkAutoRefreshLog.Text = T "ChkAutoRefresh"
     $btnClearLog.Text = T "BtnClearLog"
+    if ($chkWordWrapLog) { $chkWordWrapLog.Text = T "ChkWordWrap" }
 
     if ($dgvEventLog.Columns["Time"]) { $dgvEventLog.Columns["Time"].HeaderText = T "ColTime" }
     if ($dgvEventLog.Columns["User"]) { $dgvEventLog.Columns["User"].HeaderText = T "ColUser" }
@@ -3659,7 +3702,15 @@ function Update-StatsUI {
     # Оновлення KPI карток
     $lblCardTotalBannedVal.Text = $totalBanned.ToString()
     $lblCardUniqueCountriesVal.Text = $sortedCountries.Count.ToString()
-    $lblCardTopCountryVal.Text = if ($totalBanned -gt 0) { "$topCountryText ($topCountryShare%)" } else { "—" }
+    $topStr = if ($totalBanned -gt 0) { "$topCountryText ($topCountryShare%)" } else { "—" }
+    $lblCardTopCountryVal.Text = $topStr
+    if ($topStr.Length -gt 24) {
+        $lblCardTopCountryVal.Font = New-Object System.Drawing.Font("Segoe UI", 9.5, [System.Drawing.FontStyle]::Bold)
+    } elseif ($topStr.Length -gt 17) {
+        $lblCardTopCountryVal.Font = New-Object System.Drawing.Font("Segoe UI", 10.5, [System.Drawing.FontStyle]::Bold)
+    } else {
+        $lblCardTopCountryVal.Font = New-Object System.Drawing.Font("Segoe UI", 11.5, [System.Drawing.FontStyle]::Bold)
+    }
     $lblCardPeakHourVal.Text = if ($maxHourCount -gt 0) { "{0:D2}:00 - {1:D2}:00" -f $peakHour, (($peakHour + 1) % 24) } else { "—" }
 
     # Повідомлення про пік
@@ -4781,6 +4832,40 @@ $btnClearLog.Add_Click({
         }
     }
 })
+
+if ($chkWordWrapLog) {
+    $chkWordWrapLog.Add_CheckedChanged({
+        $txtIPBanLog.WordWrap = $chkWordWrapLog.Checked
+    })
+}
+if ($btnZoomInLog) {
+    $btnZoomInLog.Add_Click({
+        try {
+            if ($txtIPBanLog.ZoomFactor -lt 3.0) {
+                $txtIPBanLog.ZoomFactor = [Math]::Min(3.0, [Math]::Round($txtIPBanLog.ZoomFactor + 0.15, 2))
+                $lblZoomLog.Text = "$([int]($txtIPBanLog.ZoomFactor * 100))%"
+            }
+        } catch {}
+    })
+}
+if ($btnZoomOutLog) {
+    $btnZoomOutLog.Add_Click({
+        try {
+            if ($txtIPBanLog.ZoomFactor -gt 0.6) {
+                $txtIPBanLog.ZoomFactor = [Math]::Max(0.6, [Math]::Round($txtIPBanLog.ZoomFactor - 0.15, 2))
+                $lblZoomLog.Text = "$([int]($txtIPBanLog.ZoomFactor * 100))%"
+            }
+        } catch {}
+    })
+}
+if ($lblZoomLog) {
+    $lblZoomLog.Add_Click({
+        try {
+            $txtIPBanLog.ZoomFactor = 1.0
+            $lblZoomLog.Text = "100%"
+        } catch {}
+    })
+}
 
 # Контекстне меню Event Log
 $miEventBan.Add_Click({
