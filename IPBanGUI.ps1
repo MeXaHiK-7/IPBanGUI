@@ -1,4 +1,4 @@
-﻿param(
+param(
     [switch]$tray,
     [switch]$minimized,
     [switch]$show
@@ -67,7 +67,7 @@ try {
 # ------------------------------------------------------------------------------
 # Глобальні змінні та стан
 # ------------------------------------------------------------------------------
-$script:AppVersion = "v2.2.4"
+$script:AppVersion = "v2.2.5"
 $script:DefaultInstallPath = "C:\Program Files\IPBan"
 $script:CurrentInstallPath = $script:DefaultInstallPath
 $script:ServiceName = "IPBan"
@@ -5340,6 +5340,7 @@ function Initialize-App {
 
 $form.Add_Shown({
     Update-HeaderLayout
+    Update-PathPanelLayout
     Update-ServiceUI
     Refresh-BannedIPs
 

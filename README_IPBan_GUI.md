@@ -1,4 +1,4 @@
-# IPBan Manager & Control Center (GUI)
+﻿# IPBan Manager & Control Center (GUI)
 
 [![Platform: Windows](https://img.shields.io/badge/Платформа-Windows%2010%20%7C%2011%20%7C%20Server-0078D6.svg?logo=windows)](https://microsoft.com)
 [![PowerShell: 5.1+](https://img.shields.io/badge/PowerShell-5.1%2B-blue.svg?logo=powershell)](https://github.com/PowerShell/PowerShell)
@@ -23,7 +23,7 @@
 Готові скомпільовані автономні `.exe` файли доступні на сторінці [**GitHub Releases**](https://github.com/MeXaHiK-7/IPBanGUI/releases/latest):
 * **`Setup_IPBanGUI.exe`** — Графічний майстер встановлення (автоналаштування ярликів, автозапуску та аудиту безпеки).
 * **`IPBanControlCenter.exe`** — Портативний автономний запуск (без необхідності встановлення).
-* **`IPBanGUI-v2.2.4.zip`** — Повний релізний архів із програмою та документацією.
+* **`IPBanGUI-v2.2.5.zip`** — Повний релізний архів із програмою та документацією.
 
 ---
 
@@ -141,7 +141,7 @@ powershell -ExecutionPolicy Bypass -File .\Build_Binaries.ps1
 1. `app.ico` — багатошарова векторно-растрова іконка щита.
 2. `IPBanControlCenter.exe` — автономний запускний файл.
 3. `Setup_IPBanGUI.exe` — графічний майстер встановлення.
-4. `release/IPBanGUI-v2.2.4.zip` — готовий ZIP-пакет релізу.
+4. `release/IPBanGUI-v2.2.5.zip` — готовий ZIP-пакет релізу.
 
 ---
 

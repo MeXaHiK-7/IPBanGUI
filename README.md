@@ -1,4 +1,4 @@
-# IPBan Control Center
+﻿# IPBan Control Center
 
 [![Platform: Windows](https://img.shields.io/badge/Platform-Windows%2010%20%7C%2011%20%7C%20Server-0078D6.svg?logo=windows)](https://microsoft.com)
 [![PowerShell: 5.1+](https://img.shields.io/badge/PowerShell-5.1%2B-blue.svg?logo=powershell)](https://github.com/PowerShell/PowerShell)
@@ -25,7 +25,7 @@ Designed for system administrators, DevOps, and power users running Windows 10, 
 👉 Pre-compiled, standalone single-file executables are available on the [**GitHub Releases**](https://github.com/MeXaHiK-7/IPBanGUI/releases/latest) page:
 * **`Setup_IPBanGUI.exe`** — Graphical installer wizard (auto-configures shortcuts, autostart, and security audit).
 * **`IPBanControlCenter.exe`** — Portable single-file launcher (no installation required).
-* **`IPBanGUI-v2.2.4.zip`** — Complete release archive with executables and documentation.
+* **`IPBanGUI-v2.2.5.zip`** — Complete release archive with executables and documentation.
 
 ---
 
@@ -137,7 +137,7 @@ This compiles:
 1. `app.ico` – Generated multi-layer shield icon.
 2. `IPBanControlCenter.exe` – Standalone C# launcher embedding `IPBanGUI.ps1` and `settings.json`.
 3. `Setup_IPBanGUI.exe` – Standalone installer embedding the wizard and all dependencies.
-4. `release/IPBanGUI-v2.2.4.zip` – Packaged distribution archive.
+4. `release/IPBanGUI-v2.2.5.zip` – Packaged distribution archive.
 
 ---
 
