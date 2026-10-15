@@ -154,25 +154,35 @@ public class IPBanSqlite {
     [DllImport("winsqlite3.dll", EntryPoint = "sqlite3_close", CallingConvention = CallingConvention.Cdecl)]
     private static extern int sqlite3_close(IntPtr db);
 
+    [DllImport("winsqlite3.dll", EntryPoint = "sqlite3_busy_timeout", CallingConvention = CallingConvention.Cdecl)]
+    private static extern int sqlite3_busy_timeout(IntPtr db, int ms);
+
     private const int SQLITE_ROW = 100;
     private const int SQLITE_OK = 0;
 
-    public static Dictionary<string, long> ReadBanDates(string dbPath) {
-        var dict = new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
+    public static Dictionary<string, long[]> ReadBanDates(string dbPath) {
+        var dict = new Dictionary<string, long[]>(StringComparer.OrdinalIgnoreCase);
         if (string.IsNullOrEmpty(dbPath) || !System.IO.File.Exists(dbPath)) return dict;
         IntPtr db = IntPtr.Zero;
         if (sqlite3_open16(dbPath, out db) != SQLITE_OK || db == IntPtr.Zero) return dict;
         try {
+            sqlite3_busy_timeout(db, 2000);
             IntPtr stmt = IntPtr.Zero;
-            string sql = "SELECT IPAddress, BanDate FROM IPBan";
-            if (sqlite3_prepare16_v2(db, sql, sql.Length * 2, out stmt, IntPtr.Zero) == SQLITE_OK && stmt != IntPtr.Zero) {
+            string sql = "SELECT IPAddressText, BanDate, BanEndDate FROM IPAddresses WHERE BanDate IS NOT NULL AND BanDate > 0";
+            int rc = sqlite3_prepare16_v2(db, sql, -1, out stmt, IntPtr.Zero);
+            if (rc != SQLITE_OK || stmt == IntPtr.Zero) {
+                sql = "SELECT IPAddressText, BanDate, 0 FROM IPAddresses WHERE BanDate IS NOT NULL AND BanDate > 0";
+                rc = sqlite3_prepare16_v2(db, sql, -1, out stmt, IntPtr.Zero);
+            }
+            if (rc == SQLITE_OK && stmt != IntPtr.Zero) {
                 try {
                     while (sqlite3_step(stmt) == SQLITE_ROW) {
                         IntPtr ptr = sqlite3_column_text16(stmt, 0);
                         string ip = Marshal.PtrToStringUni(ptr);
                         long banDate = sqlite3_column_int64(stmt, 1);
+                        long banEndDate = sqlite3_column_int64(stmt, 2);
                         if (!string.IsNullOrEmpty(ip)) {
-                            dict[ip] = banDate;
+                            dict[ip] = new long[] { banDate, banEndDate };
                         }
                     }
                 } finally {
@@ -235,6 +245,7 @@ $script:I18N = @{
         "ColUnbanTime" = "Час розблокування"
         "BanPermanent" = "— (Назавжди)"
         "BanActive" = "Активне"
+        "BanTimeUnknown" = "— (Час не зафіксовано)"
         "BanPerConfig" = "За конфігом"
         "WhitelistNote" = "— (Білий список)"
         "BlacklistNote" = "— (Чорний список)"
@@ -410,6 +421,7 @@ $script:I18N = @{
         "ColUnbanTime" = "Unban Date & Time"
         "BanPermanent" = "— (Permanent)"
         "BanActive" = "Active"
+        "BanTimeUnknown" = "— (Time not recorded)"
         "BanPerConfig" = "Per config"
         "WhitelistNote" = "— (Whitelist)"
         "BlacklistNote" = "— (Blacklist)"
@@ -997,11 +1009,15 @@ function Get-IPBanTimesMap {
             try {
                 $sqliteBans = [IPBanSqlite]::ReadBanDates($dbPath)
                 foreach ($entry in $sqliteBans.GetEnumerator()) {
-                    $epochMs = $entry.Value
-                    if ($epochMs -gt 0) {
-                        $dt = [DateTimeOffset]::FromUnixTimeMilliseconds($epochMs).ToLocalTime().DateTime
+                    $vals = $entry.Value
+                    $banMs = if ($vals -and $vals.Length -gt 0) { $vals[0] } else { 0 }
+                    $endMs = if ($vals -and $vals.Length -gt 1) { $vals[1] } else { 0 }
+                    $dtBan = if ($banMs -gt 0) { [DateTimeOffset]::FromUnixTimeMilliseconds($banMs).ToLocalTime().DateTime } else { $null }
+                    $dtEnd = if ($endMs -gt 0) { [DateTimeOffset]::FromUnixTimeMilliseconds($endMs).ToLocalTime().DateTime } else { $null }
+                    if ($dtBan) {
                         $map[$entry.Key] = @{
-                            BanDate = $dt
+                            BanDate = $dtBan
+                            UnbanDate = $dtEnd
                             Duration = $null
                         }
                     }
@@ -1010,26 +1026,39 @@ function Get-IPBanTimesMap {
         }
     }
 
-    # 2. Читання logfile.txt (останні 3000 рядків)
+    # 2. Читання logfile.txt через швидкий стрімінг Select-String
     $logFile = Join-Path $path "logfile.txt"
     if (Test-Path $logFile) {
         try {
-            $lines = Get-Content -Path $logFile -Tail 3000 -Encoding UTF8 -ErrorAction SilentlyContinue
-            foreach ($line in $lines) {
-                if ($line -match '^(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}).*?Banning ip address:\s*([^,\s]+)') {
-                    $rawTime = $matches[1]
-                    $ip = $matches[2].Trim()
-                    $dur = $null
-                    if ($line -match 'duration:\s*([0-9\.:]+)') {
-                        $dur = $matches[1].Trim()
-                    }
-                    try {
-                        $dt = [DateTime]::ParseExact($rawTime, "yyyy-MM-dd HH:mm:ss", [System.Globalization.CultureInfo]::InvariantCulture)
-                        $map[$ip] = @{
-                            BanDate = $dt
-                            Duration = $dur
+            $foundMatches = Select-String -Path $logFile -Pattern '(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}).*?Banning ip address:\s*([^,\s]+)' -Encoding UTF8 -ErrorAction SilentlyContinue
+            if ($foundMatches) {
+                foreach ($m in $foundMatches) {
+                    $line = $m.Line
+                    if ($line -match '^(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}).*?Banning ip address:\s*([^,\s]+)') {
+                        $rawTime = $Matches[1]
+                        $ip = $Matches[2].Trim()
+                        $dur = $null
+                        if ($line -match 'duration:\s*([0-9\.:]+)') {
+                            $dur = $Matches[1].Trim()
                         }
-                    } catch {}
+                        try {
+                            $dt = [DateTime]::ParseExact($rawTime, "yyyy-MM-dd HH:mm:ss", [System.Globalization.CultureInfo]::InvariantCulture)
+                            if ($map.ContainsKey($ip)) {
+                                if (-not $map[$ip].BanDate -or $dt -gt $map[$ip].BanDate) {
+                                    $map[$ip].BanDate = $dt
+                                    if ($dur) { $map[$ip].Duration = $dur }
+                                } elseif (-not $map[$ip].Duration -and $dur) {
+                                    $map[$ip].Duration = $dur
+                                }
+                            } else {
+                                $map[$ip] = @{
+                                    BanDate = $dt
+                                    UnbanDate = $null
+                                    Duration = $dur
+                                }
+                            }
+                        } catch {}
+                    }
                 }
             }
         } catch {}
@@ -1041,6 +1070,7 @@ function Get-IPBanTimesMap {
             if (-not $map.ContainsKey($k)) {
                 $map[$k] = @{
                     BanDate = $script:ManualBanTimes[$k]
+                    UnbanDate = $null
                     Duration = $script:CurrentBanTimeSetting
                 }
             }
@@ -3125,6 +3155,14 @@ function Init-Tray {
                         Send-AbuseIPDBReport -ip $_.IPAddress
                     }
                 } catch {}
+
+                # Автоматично оновлюємо таблицю блокувань та статистику у відкритому вікні
+                try {
+                    if ($form -and $form.Visible -and -not $form.IsDisposed) {
+                        Filter-BannedGrid
+                        Update-StatsUI
+                    }
+                } catch {}
             } else {
                 Update-TrayIndicator
             }
@@ -3325,28 +3363,44 @@ function Filter-BannedGrid {
     # Отримуємо карту часу блокувань із БД / логів
     $timesMap = Get-IPBanTimesMap
 
-    $idx = 1
+    # Фільтруємо записи згідно з вибором
+    $filteredItems = @()
     foreach ($item in $allList) {
-        # Режими фільтрації:
-        # 0: ⛔ Тільки локальні блокування (Block)
-        # 1: ⚪ Тільки білий список (Allow)
-        # 2: 🏴 Чорний список (Blacklist)
-        # 3: 📋 Всі правила IPBan
         if ($filterMode -eq 0 -and $item.ActionType -ne "Block") { continue }
         if ($filterMode -eq 1 -and $item.ActionType -ne "Allow") { continue }
         if ($filterMode -eq 2 -and $item.ActionType -ne "Blacklist") { continue }
 
         if ([string]::IsNullOrEmpty($filter) -or $item.IPAddress.Contains($filter) -or $item.RuleName.Contains($filter)) {
-            $isBlock = ($item.ActionType -eq "Block")
-            $isBlacklist = ($item.ActionType -eq "Blacklist")
+            $filteredItems += $item
+        }
+    }
 
-            $banDateStr = "—"
-            $unbanDateStr = "—"
+    # Сортуємо список: найновіші блокування (за датою BanDate) зверху
+    $sortedItems = $filteredItems | Sort-Object -Descending {
+        $clean = $_.IPAddress.Trim().Replace("/255.255.255.255", "").Replace("/32", "")
+        $info = $timesMap[$clean]
+        if (-not $info) { $info = $timesMap[$_.IPAddress] }
+        if ($info -and $info.BanDate) { $info.BanDate } else { [DateTime]::MinValue }
+    }
 
-            if ($isBlock) {
-                $info = $timesMap[$item.IPAddress]
-                if ($info -and $info.BanDate) {
-                    $banDateStr = $info.BanDate.ToString("dd.MM.yyyy HH:mm:ss")
+    $idx = 1
+    foreach ($item in $sortedItems) {
+        $cleanIp = $item.IPAddress.Trim().Replace("/255.255.255.255", "").Replace("/32", "")
+        $isBlock = ($item.ActionType -eq "Block")
+        $isBlacklist = ($item.ActionType -eq "Blacklist")
+
+        $banDateStr = "—"
+        $unbanDateStr = "—"
+
+        if ($isBlock) {
+            $info = $timesMap[$cleanIp]
+            if (-not $info) { $info = $timesMap[$item.IPAddress] }
+
+            if ($info -and $info.BanDate) {
+                $banDateStr = $info.BanDate.ToString("dd.MM.yyyy HH:mm:ss")
+                if ($info.UnbanDate) {
+                    $unbanDateStr = $info.UnbanDate.ToString("dd.MM.yyyy HH:mm:ss")
+                } else {
                     $durStr = if ($info.Duration) { $info.Duration } else { $script:CurrentBanTimeSetting }
                     if ($durStr -eq "00:00:00:00" -or $durStr -eq "0.00:00:00") {
                         $unbanDateStr = (T "BanPermanent")
@@ -3358,37 +3412,37 @@ function Filter-BannedGrid {
                             $unbanDateStr = (T "BanPerConfig")
                         }
                     }
-                } else {
-                    $banDateStr = (T "BanActive")
-                    $durStr = $script:CurrentBanTimeSetting
-                    if ($durStr -eq "00:00:00:00" -or $durStr -eq "0.00:00:00") {
-                        $unbanDateStr = (T "BanPermanent")
-                    } else {
-                        $unbanDateStr = (T "BanPerConfig")
-                    }
                 }
-            } elseif ($isBlacklist) {
-                $banDateStr = (T "BlacklistNote")
-                $unbanDateStr = (T "BanPermanent")
             } else {
-                $banDateStr = (T "WhitelistNote")
-                $unbanDateStr = "—"
-            }
-
-            $cleanIp = $item.IPAddress.Trim().Replace("/255.255.255.255", "").Replace("/32", "")
-            $countryStr = "—"
-            if ($isBlock -or $isBlacklist) {
-                $geo = Get-IPCountryInfo $cleanIp
-                if ($geo) {
-                    $namePart = if ($geo.Name -and $geo.Code -ne $geo.Name) { " - " + $geo.Name } else { "" }
-                    $countryStr = "$($geo.Emoji) $($geo.Code)$namePart"
+                $banDateStr = (T "BanTimeUnknown")
+                $durStr = $script:CurrentBanTimeSetting
+                if ($durStr -eq "00:00:00:00" -or $durStr -eq "0.00:00:00") {
+                    $unbanDateStr = (T "BanPermanent")
                 } else {
-                    $countryStr = (T "ResolvingCountry")
-                    $script:GeoIPPending.Add($cleanIp) | Out-Null
+                    $unbanDateStr = (T "BanPerConfig")
                 }
             }
+        } elseif ($isBlacklist) {
+            $banDateStr = (T "BlacklistNote")
+            $unbanDateStr = (T "BanPermanent")
+        } else {
+            $banDateStr = (T "WhitelistNote")
+            $unbanDateStr = "—"
+        }
 
-            $rowIdx = $dgvBanned.Rows.Add(
+        $countryStr = "—"
+        if ($isBlock -or $isBlacklist) {
+            $geo = Get-IPCountryInfo $cleanIp
+            if ($geo) {
+                $namePart = if ($geo.Name -and $geo.Code -ne $geo.Name) { " - " + $geo.Name } else { "" }
+                $countryStr = "$($geo.Emoji) $($geo.Code)$namePart"
+            } else {
+                $countryStr = (T "ResolvingCountry")
+                $script:GeoIPPending.Add($cleanIp) | Out-Null
+            }
+        }
+
+        $rowIdx = $dgvBanned.Rows.Add(
                 $idx,
                 $item.IPAddress,
                 $countryStr,
@@ -3421,7 +3475,6 @@ function Filter-BannedGrid {
 
             $idx++
         }
-    }
 
     if ($filterMode -eq 0) {
         if ($blockCount -eq 0) {
