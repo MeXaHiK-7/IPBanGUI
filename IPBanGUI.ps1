@@ -67,7 +67,7 @@ try {
 # ------------------------------------------------------------------------------
 # Глобальні змінні та стан
 # ------------------------------------------------------------------------------
-$script:AppVersion = "v2.2.2"
+$script:AppVersion = "v2.2.3"
 $script:DefaultInstallPath = "C:\Program Files\IPBan"
 $script:CurrentInstallPath = $script:DefaultInstallPath
 $script:ServiceName = "IPBan"
@@ -264,7 +264,7 @@ $script:I18N = @{
         "ColHourAttacks" = "Кількість подій"
         "ColHourBar" = "Рівень активності"
         "BtnRefreshStats" = "Оновити статистику"
-        "PeakNotice" = "[!] Найвища активність локальних атак зафіксована у проміжку: {0}:00 - {1}:00 ({2} атак)"
+        "PeakNotice" = "[!] Пік локальних атак: {0}:00 - {1}:00 ({2} спроб)"
         "NoActiveBans" = "Локальних блокувань немає"
         "ResolvingCountry" = "🌐 Визначення..."
         "LocalNetwork" = "Локальна мережа"
@@ -441,7 +441,7 @@ $script:I18N = @{
         "ColHourAttacks" = "Event Count"
         "ColHourBar" = "Activity Level"
         "BtnRefreshStats" = "Refresh Analytics"
-        "PeakNotice" = "[!] Peak local attack activity detected at {0}:00 - {1}:00 ({2} attacks)"
+        "PeakNotice" = "[!] Peak local attacks: {0}:00 - {1}:00 ({2} attempts)"
         "NoActiveBans" = "No local bans"
         "ResolvingCountry" = "🌐 Resolving..."
         "LocalNetwork" = "Local Network"
@@ -1853,7 +1853,7 @@ $layoutStats = New-Object System.Windows.Forms.TableLayoutPanel
 $layoutStats.Dock = [System.Windows.Forms.DockStyle]::Fill
 $layoutStats.RowCount = 3
 $layoutStats.ColumnCount = 1
-$layoutStats.RowStyles.Add((New-Object System.Windows.Forms.RowStyle([System.Windows.Forms.SizeType]::Absolute, 98)))
+$layoutStats.RowStyles.Add((New-Object System.Windows.Forms.RowStyle([System.Windows.Forms.SizeType]::AutoSize)))
 $layoutStats.RowStyles.Add((New-Object System.Windows.Forms.RowStyle([System.Windows.Forms.SizeType]::Percent, 100)))
 $layoutStats.RowStyles.Add((New-Object System.Windows.Forms.RowStyle([System.Windows.Forms.SizeType]::Absolute, 40)))
 $tabStats.Controls.Add($layoutStats)
@@ -1861,6 +1861,8 @@ $tabStats.Controls.Add($layoutStats)
 # --- Рядок 0: KPI картки (4 шт) ---
 $panelKpis = New-Object System.Windows.Forms.TableLayoutPanel
 $panelKpis.Dock = [System.Windows.Forms.DockStyle]::Fill
+$panelKpis.AutoSize = $true
+$panelKpis.AutoSizeMode = [System.Windows.Forms.AutoSizeMode]::GrowAndShrink
 $panelKpis.RowCount = 1
 $panelKpis.ColumnCount = 4
 $panelKpis.ColumnStyles.Add((New-Object System.Windows.Forms.ColumnStyle([System.Windows.Forms.SizeType]::Percent, 25)))
@@ -1868,15 +1870,23 @@ $panelKpis.ColumnStyles.Add((New-Object System.Windows.Forms.ColumnStyle([System
 $panelKpis.ColumnStyles.Add((New-Object System.Windows.Forms.ColumnStyle([System.Windows.Forms.SizeType]::Percent, 25)))
 $panelKpis.ColumnStyles.Add((New-Object System.Windows.Forms.ColumnStyle([System.Windows.Forms.SizeType]::Percent, 25)))
 $panelKpis.Padding = New-Object System.Windows.Forms.Padding(8, 4, 8, 6)
+$panelKpis.Margin = New-Object System.Windows.Forms.Padding(0, 0, 0, 6)
 $layoutStats.Controls.Add($panelKpis, 0, 0)
 
 # Card 1: Всього заблоковано
 $cardTotalBanned = New-Object System.Windows.Forms.Panel
 $cardTotalBanned.Dock = [System.Windows.Forms.DockStyle]::Fill
+$cardTotalBanned.Height = 84
 $cardTotalBanned.BackColor = [System.Drawing.Color]::FromArgb(239, 246, 255)
-$cardTotalBanned.BorderStyle = [System.Windows.Forms.BorderStyle]::FixedSingle
+$cardTotalBanned.BorderStyle = [System.Windows.Forms.BorderStyle]::None
 $cardTotalBanned.Margin = New-Object System.Windows.Forms.Padding(4, 3, 4, 5)
 $cardTotalBanned.Padding = New-Object System.Windows.Forms.Padding(8, 6, 8, 4)
+$cardTotalBanned.Add_Paint([System.Windows.Forms.PaintEventHandler]{
+    param($s, $e)
+    $pen = New-Object System.Drawing.Pen([System.Drawing.Color]::FromArgb(147, 197, 253), 1)
+    $e.Graphics.DrawRectangle($pen, 0, 0, ($s.Width - 1), ($s.Height - 1))
+    $pen.Dispose()
+})
 
 $lblCardTotalBannedTitle = New-Object System.Windows.Forms.Label
 $lblCardTotalBannedTitle.Text = (T "CardTotalBanned")
@@ -1899,10 +1909,17 @@ $panelKpis.Controls.Add($cardTotalBanned, 0, 0)
 # Card 2: Унікальних країн
 $cardUniqueCountries = New-Object System.Windows.Forms.Panel
 $cardUniqueCountries.Dock = [System.Windows.Forms.DockStyle]::Fill
+$cardUniqueCountries.Height = 84
 $cardUniqueCountries.BackColor = [System.Drawing.Color]::FromArgb(236, 253, 245)
-$cardUniqueCountries.BorderStyle = [System.Windows.Forms.BorderStyle]::FixedSingle
+$cardUniqueCountries.BorderStyle = [System.Windows.Forms.BorderStyle]::None
 $cardUniqueCountries.Margin = New-Object System.Windows.Forms.Padding(4, 3, 4, 5)
 $cardUniqueCountries.Padding = New-Object System.Windows.Forms.Padding(8, 6, 8, 4)
+$cardUniqueCountries.Add_Paint([System.Windows.Forms.PaintEventHandler]{
+    param($s, $e)
+    $pen = New-Object System.Drawing.Pen([System.Drawing.Color]::FromArgb(110, 231, 183), 1)
+    $e.Graphics.DrawRectangle($pen, 0, 0, ($s.Width - 1), ($s.Height - 1))
+    $pen.Dispose()
+})
 
 $lblCardUniqueCountriesTitle = New-Object System.Windows.Forms.Label
 $lblCardUniqueCountriesTitle.Text = (T "CardUniqueCountries")
@@ -1925,10 +1942,17 @@ $panelKpis.Controls.Add($cardUniqueCountries, 1, 0)
 # Card 3: Топ-країна атак
 $cardTopCountry = New-Object System.Windows.Forms.Panel
 $cardTopCountry.Dock = [System.Windows.Forms.DockStyle]::Fill
+$cardTopCountry.Height = 84
 $cardTopCountry.BackColor = [System.Drawing.Color]::FromArgb(255, 241, 242)
-$cardTopCountry.BorderStyle = [System.Windows.Forms.BorderStyle]::FixedSingle
+$cardTopCountry.BorderStyle = [System.Windows.Forms.BorderStyle]::None
 $cardTopCountry.Margin = New-Object System.Windows.Forms.Padding(4, 3, 4, 5)
 $cardTopCountry.Padding = New-Object System.Windows.Forms.Padding(8, 6, 8, 4)
+$cardTopCountry.Add_Paint([System.Windows.Forms.PaintEventHandler]{
+    param($s, $e)
+    $pen = New-Object System.Drawing.Pen([System.Drawing.Color]::FromArgb(252, 165, 165), 1)
+    $e.Graphics.DrawRectangle($pen, 0, 0, ($s.Width - 1), ($s.Height - 1))
+    $pen.Dispose()
+})
 
 $lblCardTopCountryTitle = New-Object System.Windows.Forms.Label
 $lblCardTopCountryTitle.Text = (T "CardTopCountry")
@@ -1954,10 +1978,17 @@ $panelKpis.Controls.Add($cardTopCountry, 2, 0)
 # Card 4: Піковий час атак
 $cardPeakHour = New-Object System.Windows.Forms.Panel
 $cardPeakHour.Dock = [System.Windows.Forms.DockStyle]::Fill
+$cardPeakHour.Height = 84
 $cardPeakHour.BackColor = [System.Drawing.Color]::FromArgb(255, 251, 235)
-$cardPeakHour.BorderStyle = [System.Windows.Forms.BorderStyle]::FixedSingle
+$cardPeakHour.BorderStyle = [System.Windows.Forms.BorderStyle]::None
 $cardPeakHour.Margin = New-Object System.Windows.Forms.Padding(4, 3, 4, 5)
 $cardPeakHour.Padding = New-Object System.Windows.Forms.Padding(8, 6, 8, 4)
+$cardPeakHour.Add_Paint([System.Windows.Forms.PaintEventHandler]{
+    param($s, $e)
+    $pen = New-Object System.Drawing.Pen([System.Drawing.Color]::FromArgb(252, 211, 77), 1)
+    $e.Graphics.DrawRectangle($pen, 0, 0, ($s.Width - 1), ($s.Height - 1))
+    $pen.Dispose()
+})
 
 $lblCardPeakHourTitle = New-Object System.Windows.Forms.Label
 $lblCardPeakHourTitle.Text = (T "CardPeakHour")
@@ -1988,6 +2019,7 @@ $panelStatsBody.ColumnCount = 2
 $panelStatsBody.ColumnStyles.Add((New-Object System.Windows.Forms.ColumnStyle([System.Windows.Forms.SizeType]::Percent, 50)))
 $panelStatsBody.ColumnStyles.Add((New-Object System.Windows.Forms.ColumnStyle([System.Windows.Forms.SizeType]::Percent, 50)))
 $panelStatsBody.Padding = New-Object System.Windows.Forms.Padding(8, 0, 8, 4)
+$panelStatsBody.Margin = New-Object System.Windows.Forms.Padding(0, 6, 0, 0)
 $layoutStats.Controls.Add($panelStatsBody, 0, 1)
 
 # Ліва група: Топ-країни атак
@@ -2040,14 +2072,20 @@ $panelStatsBody.Controls.Add($gbTimeStats, 1, 0)
 
 $lblPeakBanner = New-Object System.Windows.Forms.Label
 $lblPeakBanner.Dock = [System.Windows.Forms.DockStyle]::Top
-$lblPeakBanner.Height = 34
+$lblPeakBanner.AutoSize = $true
 $lblPeakBanner.BackColor = [System.Drawing.Color]::FromArgb(254, 242, 242)
 $lblPeakBanner.ForeColor = [System.Drawing.Color]::FromArgb(185, 28, 28)
 $lblPeakBanner.Font = New-Object System.Drawing.Font("Segoe UI", 8.5, [System.Drawing.FontStyle]::Bold)
 $lblPeakBanner.Padding = New-Object System.Windows.Forms.Padding(6, 4, 6, 4)
 $lblPeakBanner.Visible = $false
 $lblPeakBanner.TextAlign = [System.Drawing.ContentAlignment]::MiddleLeft
-$lblPeakBanner.AutoEllipsis = $true
+$lblPeakBanner.AutoEllipsis = $false
+
+$gbTimeStats.Add_Resize({
+    if ($lblPeakBanner) {
+        $lblPeakBanner.MaximumSize = New-Object System.Drawing.Size([Math]::Max(100, ($gbTimeStats.ClientSize.Width - 16)), 0)
+    }
+})
 
 $dgvTimeStats = New-Object System.Windows.Forms.DataGridView
 $dgvTimeStats.Dock = [System.Windows.Forms.DockStyle]::Fill
@@ -3716,6 +3754,7 @@ function Update-StatsUI {
     # Повідомлення про пік
     if ($maxHourCount -gt 0) {
         $nextH = ($peakHour + 1) % 24
+        $lblPeakBanner.MaximumSize = New-Object System.Drawing.Size([Math]::Max(100, ($gbTimeStats.ClientSize.Width - 16)), 0)
         $lblPeakBanner.Text = [string]::Format((T "PeakNotice"), ("{0:D2}" -f $peakHour), ("{0:D2}" -f $nextH), $maxHourCount)
         $lblPeakBanner.Visible = $true
     } else {

@@ -10,8 +10,8 @@ Add-Type -AssemblyName System.Windows.Forms
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 if (-not $scriptDir) { $scriptDir = (Get-Location).Path }
 
-$appVersion = "2.2.2.0"
-$appDisplayVersion = "2.2.2"
+$appVersion = "2.2.3.0"
+$appDisplayVersion = "2.2.3"
 
 # Допоміжна функція створення GZip Base64 архіву файлів
 function New-GZipPackage([string[]]$fileNames, [string]$baseFolder) {
@@ -380,7 +380,7 @@ if ($cr2.Errors.Count -eq 0) {
     Copy-Item $launcherExe -Destination (Join-Path $relDir "IPBanControlCenter.exe") -Force
     Copy-Item $setupExe -Destination (Join-Path $relDir "Setup_IPBanGUI.exe") -Force
 
-    $zipPath = Join-Path $relDir "IPBanGUI-v2.2.2.zip"
+    $zipPath = Join-Path $relDir "IPBanGUI-v2.2.3.zip"
     if (Test-Path $zipPath) { Remove-Item $zipPath -Force }
     Add-Type -AssemblyName System.IO.Compression.FileSystem
     $tempZipDir = Join-Path $env:TEMP ("zip_" + [Guid]::NewGuid().ToString("N"))
