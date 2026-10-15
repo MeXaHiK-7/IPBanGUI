@@ -1,4 +1,4 @@
-# ==============================================================================
+﻿# ==============================================================================
 # Installer.ps1
 # Графічний майстер встановлення (Installer Wizard) для IPBan Manager & Control Center
 # ==============================================================================
@@ -79,6 +79,12 @@ $script:InstI18N = @{
         "FinishTitle" = "Встановлення успішно завершено!"
         "FinishDesc" = "IPBan Manager & Control Center $script:InstallerVersion успішно встановлено на ваш комп'ютер.`n`nПрограма готова до роботи. Ви можете запускати її через ярлик на Робочому столі або з меню «Пуск»."
         "ChkLaunchNow" = "Запустити IPBan Control Center зараз"
+        "FinishTipsHeader" = "Поради для початку роботи:"
+        "FinishTips" = @(
+            "Значок у системному треї: програма згортається біля годинника та працює у фоновому режимі",
+            "Швидкі дії: правий клік по щитку в треї відкриває меню з паузою, логами та швидким доступом",
+            "Керування IP: перегляд та ручне розблокування IP доступні на першій вкладці вікна"
+        )
         "BtnBack" = "< Назад"
         "BtnNext" = "Далі >"
         "BtnInstall" = "Встановити"
@@ -119,6 +125,12 @@ $script:InstI18N = @{
         "FinishTitle" = "Installation Successfully Completed!"
         "FinishDesc" = "IPBan Manager & Control Center $script:InstallerVersion has been installed.`n`nThe software is ready to protect your system from unauthorized access."
         "ChkLaunchNow" = "Launch IPBan Control Center now"
+        "FinishTipsHeader" = "Quick start tips:"
+        "FinishTips" = @(
+            "System Tray: application minimizes near the system clock and runs silently in background",
+            "Quick Actions: right-click the tray shield to open quick controls, logs and diagnostics",
+            "Ban Management: review banned IPs, whitelist and firewall rules on the primary tab"
+        )
         "BtnBack" = "< Back"
         "BtnNext" = "Next >"
         "BtnInstall" = "Install"
@@ -337,7 +349,7 @@ function Update-NavButtonsLayout {
         $btnBack.Visible = $false
         $btnCancel.Visible = $false
         $btnNext.Visible = $true
-        $btnNext.Text = "Завершити"
+        $btnNext.Text = InstT "BtnFinish"
         $btnNext.Width = 125
         $btnNext.Height = 34
         $btnNext.Left = $w - $btnNext.Width - 25
@@ -633,9 +645,46 @@ $chkLaunchNow.Text = "Запустити IPBan Control Center зараз"
 $chkLaunchNow.Checked = $true
 $chkLaunchNow.Font = New-Object System.Drawing.Font("Segoe UI", 9.5, [System.Drawing.FontStyle]::Bold)
 $chkLaunchNow.ForeColor = [System.Drawing.Color]::FromArgb(30, 58, 138)
-$chkLaunchNow.Location = New-Object System.Drawing.Point(10, 145)
-$chkLaunchNow.Size = New-Object System.Drawing.Size(490, 30)
+$chkLaunchNow.Location = New-Object System.Drawing.Point(10, 140)
+$chkLaunchNow.Size = New-Object System.Drawing.Size(490, 28)
 $p4.Controls.Add($chkLaunchNow)
+
+# Інформаційна картка швидкого старту (Quick Tips Card)
+$gbFinishTips = New-Object System.Windows.Forms.GroupBox
+$gbFinishTips.Text = "💡 Поради для початку роботи:"
+$gbFinishTips.Font = New-Object System.Drawing.Font("Segoe UI", 9, [System.Drawing.FontStyle]::Bold)
+$gbFinishTips.ForeColor = [System.Drawing.Color]::FromArgb(30, 41, 59)
+$gbFinishTips.Location = New-Object System.Drawing.Point(10, 178)
+$gbFinishTips.Size = New-Object System.Drawing.Size(490, 150)
+$p4.Controls.Add($gbFinishTips)
+
+$finishTipLabels = @()
+$tipBulletPoints = @(
+    "Значок у системному треї: програма згортається біля годинника та працює у фоновому режимі",
+    "Швидкі дії: правий клік по щитку в треї відкриває меню з паузою, логами та швидким доступом",
+    "Керування IP: перегляд та ручне розблокування IP доступні на першій вкладці вікна"
+)
+$tipY = 24
+foreach ($tip in $tipBulletPoints) {
+    $lblTipBullet = New-Object System.Windows.Forms.Label
+    $lblTipBullet.Text = "•"
+    $lblTipBullet.Font = New-Object System.Drawing.Font("Segoe UI", 11, [System.Drawing.FontStyle]::Bold)
+    $lblTipBullet.ForeColor = [System.Drawing.Color]::FromArgb(37, 99, 235)
+    $lblTipBullet.Location = New-Object System.Drawing.Point(12, $tipY)
+    $lblTipBullet.Size = New-Object System.Drawing.Size(15, 20)
+    $gbFinishTips.Controls.Add($lblTipBullet)
+
+    $lblTipText = New-Object System.Windows.Forms.Label
+    $lblTipText.Text = $tip
+    $lblTipText.Font = New-Object System.Drawing.Font("Segoe UI", 8.75)
+    $lblTipText.ForeColor = [System.Drawing.Color]::FromArgb(71, 85, 105)
+    $lblTipText.Location = New-Object System.Drawing.Point(28, [int]($tipY + 1))
+    $lblTipText.Size = New-Object System.Drawing.Size(450, 36)
+    $gbFinishTips.Controls.Add($lblTipText)
+    $finishTipLabels += $lblTipText
+
+    $tipY += 38
+}
 
 # ------------------------------------------------------------------------------
 # ------------------------------------------------------------------------------
@@ -685,6 +734,13 @@ function Apply-InstallerLanguage {
     $lblFinishTitle.Text = InstT "FinishTitle"
     $lblFinishDesc.Text = InstT "FinishDesc"
     $chkLaunchNow.Text = InstT "ChkLaunchNow"
+    $gbFinishTips.Text = InstT "FinishTipsHeader"
+    $tipTexts = InstT "FinishTips"
+    for ($i = 0; $i -lt $finishTipLabels.Count; $i++) {
+        if ($i -lt $tipTexts.Count) {
+            $finishTipLabels[$i].Text = $tipTexts[$i]
+        }
+    }
 
     $btnBack.Text = InstT "BtnBack"
     $btnCancel.Text = InstT "BtnCancel"

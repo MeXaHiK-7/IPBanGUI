@@ -1,4 +1,4 @@
-param(
+﻿param(
     [switch]$tray,
     [switch]$minimized,
     [switch]$show

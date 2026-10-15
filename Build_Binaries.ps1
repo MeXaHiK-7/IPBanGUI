@@ -13,6 +13,46 @@ if (-not $scriptDir) { $scriptDir = (Get-Location).Path }
 $appVersion = "2.2.5.0"
 $appDisplayVersion = "2.2.5"
 
+# ------------------------------------------------------------------------------
+# 0. Захист кодування: гарантований UTF-8 BOM для всіх .ps1 файлів
+# ------------------------------------------------------------------------------
+$utf8BOM = New-Object System.Text.UTF8Encoding($true)
+Get-ChildItem -Path $scriptDir -Filter "*.ps1" | ForEach-Object {
+    $bytes = [System.IO.File]::ReadAllBytes($_.FullName)
+    if ($bytes.Length -lt 3 -or $bytes[0] -ne 0xEF -or $bytes[1] -ne 0xBB -or $bytes[2] -ne 0xBF) {
+        $text = [System.IO.File]::ReadAllText($_.FullName, [System.Text.Encoding]::UTF8)
+        [System.IO.File]::WriteAllText($_.FullName, $text, $utf8BOM)
+        Write-Host "🔧 Відновлено UTF-8 BOM для: $($_.Name)" -ForegroundColor Yellow
+    }
+}
+
+# ------------------------------------------------------------------------------
+# 0.1 Генерація UAC-маніфесту для запуску з правами адміністратора
+# ------------------------------------------------------------------------------
+$manifestContent = @"
+<?xml version="1.0" encoding="utf-8"?>
+<assembly manifestVersion="1.0" xmlns="urn:schemas-microsoft-com:asm.v1">
+  <assemblyIdentity version="$appVersion" name="IPBanManager.app"/>
+  <trustInfo xmlns="urn:schemas-microsoft-com:asm.v2">
+    <security>
+      <requestedPrivileges xmlns="urn:schemas-microsoft-com:asm.v3">
+        <requestedExecutionLevel level="requireAdministrator" uiAccess="false" />
+      </requestedPrivileges>
+    </security>
+  </trustInfo>
+  <compatibility xmlns="urn:schemas-microsoft-com:compatibility.v1">
+    <application>
+      <supportedOS Id="{8e0f7a12-bfb3-4fe8-b9a5-48fd50a15a9a}"/>
+      <supportedOS Id="{1f676c76-80e1-4239-95bb-83d0f6d0da78}"/>
+      <supportedOS Id="{4a2f28e3-53b9-4441-ba9c-d69d4a4a6e38}"/>
+      <supportedOS Id="{35138b9a-5d96-4fbd-8e2d-a2440225f93a}"/>
+    </application>
+  </compatibility>
+</assembly>
+"@
+$manifestPath = Join-Path $env:TEMP "IPBanApp.manifest"
+[System.IO.File]::WriteAllText($manifestPath, $manifestContent, [System.Text.Encoding]::UTF8)
+
 # Допоміжна функція створення GZip Base64 архіву файлів
 function New-GZipPackage([string[]]$fileNames, [string]$baseFolder) {
     $ms = New-Object System.IO.MemoryStream
@@ -246,7 +286,7 @@ $opt1.ReferencedAssemblies.Add("System.Windows.Forms.dll") | Out-Null
 $opt1.GenerateExecutable = $true
 $launcherExe = Join-Path $scriptDir "IPBanControlCenter.exe"
 $opt1.OutputAssembly = $launcherExe
-$opt1.CompilerOptions = "/target:winexe /win32icon:`"$icoPath`" /codepage:65001"
+$opt1.CompilerOptions = "/target:winexe /win32icon:`"$icoPath`" /win32manifest:`"$manifestPath`" /codepage:65001"
 
 $cp = New-Object Microsoft.CSharp.CSharpCodeProvider
 $cr1 = $cp.CompileAssemblyFromSource($opt1, $csharpLauncher)
@@ -344,6 +384,14 @@ namespace IPBanSetup {
                 Process p = Process.Start(psi);
                 if (p != null) {
                     p.WaitForExit();
+                    if (p.ExitCode != 0) {
+                        MessageBox.Show(
+                            "\u041C\u0430\u0439\u0441\u0442\u0435\u0440 \u0432\u0441\u0442\u0430\u043D\u043E\u0432\u043B\u0435\u043D\u043D\u044F \u0437\u0430\u0432\u0435\u0440\u0448\u0438\u0432\u0441\u044F \u0437 \u043A\u043E\u0434\u043E\u043C \u043F\u043E\u043C\u0438\u043B\u043A\u0438: " + p.ExitCode + ".\n\u041F\u0435\u0440\u0435\u0432\u0456\u0440\u0442\u0435 \u043F\u0440\u0430\u0432\u0430 \u0434\u043E\u0441\u0442\u0443\u043F\u0443 \u0442\u0430 PowerShell 5.1+.",
+                            "\u041F\u043E\u043C\u0438\u043B\u043A\u0430 \u0456\u043D\u0441\u0442\u0430\u043B\u044F\u0442\u043E\u0440\u0430",
+                            MessageBoxButtons.OK,
+                            MessageBoxIcon.Warning
+                        );
+                    }
                 }
             } catch (System.ComponentModel.Win32Exception) {
                 // Користувач відхилив запит UAC
@@ -368,7 +416,7 @@ $opt2.ReferencedAssemblies.Add("System.Windows.Forms.dll") | Out-Null
 $opt2.GenerateExecutable = $true
 $setupExe = Join-Path $scriptDir "Setup_IPBanGUI.exe"
 $opt2.OutputAssembly = $setupExe
-$opt2.CompilerOptions = "/target:winexe /win32icon:`"$icoPath`" /codepage:65001"
+$opt2.CompilerOptions = "/target:winexe /win32icon:`"$icoPath`" /win32manifest:`"$manifestPath`" /codepage:65001"
 
 $cr2 = $cp.CompileAssemblyFromSource($opt2, $csharpSetup)
 if ($cr2.Errors.Count -eq 0) {
