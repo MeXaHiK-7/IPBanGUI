@@ -1148,6 +1148,20 @@ function Test-IsPrivateIP([string]$ip) {
     return $false
 }
 
+function Format-CountryDisplay([string]$code, [string]$name) {
+    if ([string]::IsNullOrWhiteSpace($code) -or $code -eq "??") {
+        return "🌐 ?? - " + (T "UnknownCountry")
+    }
+    if ($code -eq "LAN") {
+        return "🏠 LAN - " + (T "LocalNetwork")
+    }
+    $c = $code.ToUpper().Trim()
+    if ($name -and $name.Trim() -ne $c) {
+        return "$c - $($name.Trim())"
+    }
+    return $c
+}
+
 function Get-IPCountryInfo([string]$ip) {
     $clean = $ip.Trim().Replace("/255.255.255.255", "").Replace("/32", "")
     if ([string]::IsNullOrWhiteSpace($clean)) { return $null }
@@ -1290,8 +1304,7 @@ function Resolve-NextPendingGeoIP {
                         $clean = $cellIp.ToString().Trim().Replace("/255.255.255.255", "").Replace("/32", "")
                         if ($script:GeoIPCache.ContainsKey($clean)) {
                             $geo = $script:GeoIPCache[$clean]
-                            $namePart = if ($geo.Name -and $geo.Code -ne $geo.Name) { " - " + $geo.Name } else { "" }
-                            $row.Cells[$cIdx].Value = "$($geo.Emoji) $($geo.Code)$namePart"
+                            $row.Cells[$cIdx].Value = Format-CountryDisplay $geo.Code $geo.Name
                         }
                     }
                 }
@@ -3434,8 +3447,7 @@ function Filter-BannedGrid {
         if ($isBlock -or $isBlacklist) {
             $geo = Get-IPCountryInfo $cleanIp
             if ($geo) {
-                $namePart = if ($geo.Name -and $geo.Code -ne $geo.Name) { " - " + $geo.Name } else { "" }
-                $countryStr = "$($geo.Emoji) $($geo.Code)$namePart"
+                $countryStr = Format-CountryDisplay $geo.Code $geo.Name
             } else {
                 $countryStr = (T "ResolvingCountry")
                 $script:GeoIPPending.Add($cleanIp) | Out-Null
@@ -3503,38 +3515,61 @@ function Update-StatsUI {
     $allList = @($script:LastBannedIPs | Where-Object { $_.ActionType -eq "Block" })
     $totalBanned = $allList.Count
 
-    # 1. Розподіл по країнах
+    # 1. Розподіл по країнах (групуємо за кодом країни)
     $countryMap = @{}
 
     foreach ($item in $allList) {
         $clean = $item.IPAddress.Trim().Replace("/255.255.255.255", "").Replace("/32", "")
         if (Test-IsPrivateIP $clean) {
-            $key = "🏠 LAN - " + (T "LocalNetwork")
+            $key = "LAN"
             if (-not $countryMap.ContainsKey($key)) {
-                $countryMap[$key] = @{ Key = $key; Count = 0; Flag = "🏠"; Name = (T "LocalNetwork") }
+                $countryMap[$key] = [PSCustomObject]@{
+                    Code        = "LAN"
+                    DisplayName = "🏠 LAN - " + (T "LocalNetwork")
+                    ShortName   = "LAN - " + (T "LocalNetwork")
+                    AttackCount = 0
+                }
             }
-            $countryMap[$key].Count++
+            $countryMap[$key].AttackCount++
             continue
         }
 
         if ($script:GeoIPCache.ContainsKey($clean)) {
             $geo = $script:GeoIPCache[$clean]
-            $namePart = if ($geo.Name -and $geo.Code -ne $geo.Name) { " - " + $geo.Name } else { "" }
-            $key = "$($geo.Emoji) $($geo.Code)$namePart"
+            $code = if ($geo.Code) { $geo.Code.ToUpper().Trim() } else { "??" }
+            $name = if ($geo.Name -and $geo.Name.Trim() -ne $code) { $geo.Name.Trim() } else { "" }
+            $key = $code
+
             if (-not $countryMap.ContainsKey($key)) {
-                $countryMap[$key] = @{ Key = $key; Count = 0; Flag = $geo.Emoji; Name = "$($geo.Code)$namePart" }
+                $display = Format-CountryDisplay $code $name
+                $countryMap[$key] = [PSCustomObject]@{
+                    Code        = $code
+                    DisplayName = $display
+                    ShortName   = $display
+                    AttackCount = 0
+                }
+            } elseif ($name -and $countryMap[$key].DisplayName -eq $code) {
+                $display = Format-CountryDisplay $code $name
+                $countryMap[$key].DisplayName = $display
+                $countryMap[$key].ShortName   = $display
             }
-            $countryMap[$key].Count++
+            $countryMap[$key].AttackCount++
         } else {
-            $key = "🌐 ?? - " + (T "UnknownCountry")
+            $key = "??"
             if (-not $countryMap.ContainsKey($key)) {
-                $countryMap[$key] = @{ Key = $key; Count = 0; Flag = "🌐"; Name = (T "UnknownCountry") }
+                $display = "🌐 ?? - " + (T "UnknownCountry")
+                $countryMap[$key] = [PSCustomObject]@{
+                    Code        = "??"
+                    DisplayName = $display
+                    ShortName   = (T "UnknownCountry")
+                    AttackCount = 0
+                }
             }
-            $countryMap[$key].Count++
+            $countryMap[$key].AttackCount++
         }
     }
 
-    $sortedCountries = @($countryMap.Values | Sort-Object -Property Count -Descending)
+    $sortedCountries = @($countryMap.Values | Sort-Object -Property AttackCount -Descending)
     $dgvCountryStats.Rows.Clear()
     $rank = 1
     $topCountryText = "—"
@@ -3544,16 +3579,16 @@ function Update-StatsUI {
         [void]$dgvCountryStats.Rows.Add("—", (T "NoActiveBans"), "0", "0%", "—")
     } else {
         foreach ($entry in $sortedCountries) {
-            $share = if ($totalBanned -gt 0) { [Math]::Round(($entry.Count / [double]$totalBanned) * 100.0, 1) } else { 0.0 }
+            $share = if ($totalBanned -gt 0) { [Math]::Round(($entry.AttackCount / [double]$totalBanned) * 100.0, 1) } else { 0.0 }
             $bar = Get-VisualBar $share 12
             if ($rank -eq 1 -and $totalBanned -gt 0) {
-                $topCountryText = "$($entry.Flag) $($entry.Name)"
+                $topCountryText = $entry.ShortName
                 $topCountryShare = $share
             }
             $rIdx = $dgvCountryStats.Rows.Add(
                 $rank,
-                $entry.Key,
-                $entry.Count,
+                $entry.DisplayName,
+                $entry.AttackCount,
                 "$share%",
                 $bar
             )
