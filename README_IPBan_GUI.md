@@ -23,7 +23,7 @@
 Готові скомпільовані автономні `.exe` файли доступні на сторінці [**GitHub Releases**](https://github.com/MeXaHiK-7/IPBanGUI/releases/latest):
 * **`Setup_IPBanGUI.exe`** — Графічний майстер встановлення (автоналаштування ярликів, автозапуску та аудиту безпеки).
 * **`IPBanControlCenter.exe`** — Портативний автономний запуск (без необхідності встановлення).
-* **`IPBanGUI-v2.2.3.zip`** — Повний релізний архів із програмою та документацією.
+* **`IPBanGUI-v2.2.4.zip`** — Повний релізний архів із програмою та документацією.
 
 ---
 
@@ -141,7 +141,7 @@ powershell -ExecutionPolicy Bypass -File .\Build_Binaries.ps1
 1. `app.ico` — багатошарова векторно-растрова іконка щита.
 2. `IPBanControlCenter.exe` — автономний запускний файл.
 3. `Setup_IPBanGUI.exe` — графічний майстер встановлення.
-4. `release/IPBanGUI-v2.2.3.zip` — готовий ZIP-пакет релізу.
+4. `release/IPBanGUI-v2.2.4.zip` — готовий ZIP-пакет релізу.
 
 ---
 

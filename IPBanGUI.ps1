@@ -67,7 +67,7 @@ try {
 # ------------------------------------------------------------------------------
 # Глобальні змінні та стан
 # ------------------------------------------------------------------------------
-$script:AppVersion = "v2.2.3"
+$script:AppVersion = "v2.2.4"
 $script:DefaultInstallPath = "C:\Program Files\IPBan"
 $script:CurrentInstallPath = $script:DefaultInstallPath
 $script:ServiceName = "IPBan"
@@ -236,7 +236,7 @@ $script:I18N = @{
         "FilterAllRules" = "📋 Всі правила IPBan"
         "BtnUnbanSelected" = "Розблокувати обрані"
         "BtnManualBan" = "Заблокувати вручну..."
-        "BtnUnbanAll" = "Очистити локальні блокування"
+        "BtnUnbanAll" = "Очистити блокування"
         "BtnExport" = "Експорт..."
         "ColIndex" = "#"
         "ColIP" = "IP-адреса (Whois)"
@@ -1643,31 +1643,48 @@ $pathPanel.Controls.Add($lblPath)
 
 $txtInstallPath = New-Object System.Windows.Forms.TextBox
 $txtInstallPath.Text = Get-IPBanPath
-$txtInstallPath.Location = New-Object System.Drawing.Point(105, 8)
-$txtInstallPath.Size = New-Object System.Drawing.Size(530, 25)
 $pathPanel.Controls.Add($txtInstallPath)
 
 $btnBrowsePath = New-Object System.Windows.Forms.Button
 $btnBrowsePath.Text = "Огляд..."
-$btnBrowsePath.Location = New-Object System.Drawing.Point(645, 7)
 $btnBrowsePath.Size = New-Object System.Drawing.Size(80, 27)
 $pathPanel.Controls.Add($btnBrowsePath)
 
 $btnOpenFolder = New-Object System.Windows.Forms.Button
 $btnOpenFolder.Text = "Відкрити папку"
-$btnOpenFolder.Location = New-Object System.Drawing.Point(735, 7)
-$btnOpenFolder.Size = New-Object System.Drawing.Size(140, 27)
+$btnOpenFolder.Size = New-Object System.Drawing.Size(130, 27)
 $pathPanel.Controls.Add($btnOpenFolder)
 
 $btnOpenConfigFile = New-Object System.Windows.Forms.Button
 $btnOpenConfigFile.Text = "Відкрити конфіг"
-$btnOpenConfigFile.Location = New-Object System.Drawing.Point(885, 7)
-$btnOpenConfigFile.Size = New-Object System.Drawing.Size(145, 27)
+$btnOpenConfigFile.Size = New-Object System.Drawing.Size(135, 27)
 $pathPanel.Controls.Add($btnOpenConfigFile)
 
 Set-SmoothButton $btnBrowsePath 6 ([System.Drawing.Color]::FromArgb(203, 213, 225))
 Set-SmoothButton $btnOpenFolder 6 ([System.Drawing.Color]::FromArgb(203, 213, 225))
 Set-SmoothButton $btnOpenConfigFile 6 ([System.Drawing.Color]::FromArgb(203, 213, 225))
+
+function Update-PathPanelLayout {
+    if (-not $pathPanel -or -not $btnOpenConfigFile -or -not $lblPath -or -not $txtInstallPath) { return }
+    $w = $pathPanel.ClientSize.Width
+    $right = $w - 10
+
+    $btnOpenConfigFile.Location = New-Object System.Drawing.Point(($right - $btnOpenConfigFile.Width), 7)
+    $right -= ($btnOpenConfigFile.Width + 8)
+
+    $btnOpenFolder.Location = New-Object System.Drawing.Point(($right - $btnOpenFolder.Width), 7)
+    $right -= ($btnOpenFolder.Width + 8)
+
+    $btnBrowsePath.Location = New-Object System.Drawing.Point(($right - $btnBrowsePath.Width), 7)
+    $right -= ($btnBrowsePath.Width + 8)
+
+    $txtLeft = $lblPath.Right + 8
+    $txtWidth = [Math]::Max(80, ($right - $txtLeft))
+    $txtInstallPath.Location = New-Object System.Drawing.Point($txtLeft, 8)
+    $txtInstallPath.Size = New-Object System.Drawing.Size($txtWidth, 25)
+}
+$pathPanel.Add_Resize({ Update-PathPanelLayout })
+Update-PathPanelLayout
 
 # ------------------------------------------------------------------------------
 # 3. Вкладки інтерфейсу (TabControl)
@@ -1689,38 +1706,41 @@ $layoutBanned = New-Object System.Windows.Forms.TableLayoutPanel
 $layoutBanned.Dock = [System.Windows.Forms.DockStyle]::Fill
 $layoutBanned.RowCount = 3
 $layoutBanned.ColumnCount = 1
-$layoutBanned.RowStyles.Add((New-Object System.Windows.Forms.RowStyle([System.Windows.Forms.SizeType]::Absolute, 50)))
+$layoutBanned.RowStyles.Add((New-Object System.Windows.Forms.RowStyle([System.Windows.Forms.SizeType]::AutoSize)))
 $layoutBanned.RowStyles.Add((New-Object System.Windows.Forms.RowStyle([System.Windows.Forms.SizeType]::Percent, 100)))
 $layoutBanned.RowStyles.Add((New-Object System.Windows.Forms.RowStyle([System.Windows.Forms.SizeType]::Absolute, 40)))
 $tabBanned.Controls.Add($layoutBanned)
 
-# Панель дій над заблокованими IP
-$panelBannedActions = New-Object System.Windows.Forms.Panel
+# Панель дій над заблокованими IP (адаптивний FlowLayoutPanel із автоперенесенням)
+$panelBannedActions = New-Object System.Windows.Forms.FlowLayoutPanel
 $panelBannedActions.Dock = [System.Windows.Forms.DockStyle]::Fill
-$panelBannedActions.Padding = New-Object System.Windows.Forms.Padding(5)
+$panelBannedActions.AutoSize = $true
+$panelBannedActions.AutoSizeMode = [System.Windows.Forms.AutoSizeMode]::GrowAndShrink
+$panelBannedActions.WrapContents = $true
+$panelBannedActions.Padding = New-Object System.Windows.Forms.Padding(6, 6, 6, 4)
 $layoutBanned.Controls.Add($panelBannedActions, 0, 0)
 
 $lblSearch = New-Object System.Windows.Forms.Label
-$lblSearch.Text = "Пошук:"
-$lblSearch.Location = New-Object System.Drawing.Point(10, 15)
+$lblSearch.Text = (T "Search")
 $lblSearch.AutoSize = $true
+$lblSearch.Margin = New-Object System.Windows.Forms.Padding(3, 7, 3, 3)
 $panelBannedActions.Controls.Add($lblSearch)
 
 $txtSearchBanned = New-Object System.Windows.Forms.TextBox
-$txtSearchBanned.Location = New-Object System.Drawing.Point(60, 12)
-$txtSearchBanned.Size = New-Object System.Drawing.Size(120, 25)
+$txtSearchBanned.Size = New-Object System.Drawing.Size(110, 25)
+$txtSearchBanned.Margin = New-Object System.Windows.Forms.Padding(3, 4, 8, 3)
 $panelBannedActions.Controls.Add($txtSearchBanned)
 
 $lblFilterType = New-Object System.Windows.Forms.Label
-$lblFilterType.Text = "Фільтр:"
-$lblFilterType.Location = New-Object System.Drawing.Point(190, 15)
+$lblFilterType.Text = (T "Filter")
 $lblFilterType.AutoSize = $true
+$lblFilterType.Margin = New-Object System.Windows.Forms.Padding(3, 7, 3, 3)
 $panelBannedActions.Controls.Add($lblFilterType)
 
 $cbRuleFilter = New-Object System.Windows.Forms.ComboBox
 $cbRuleFilter.DropDownStyle = [System.Windows.Forms.ComboBoxStyle]::DropDownList
-$cbRuleFilter.Location = New-Object System.Drawing.Point(245, 12)
-$cbRuleFilter.Size = New-Object System.Drawing.Size(205, 25)
+$cbRuleFilter.Size = New-Object System.Drawing.Size(190, 25)
+$cbRuleFilter.Margin = New-Object System.Windows.Forms.Padding(3, 4, 8, 3)
 $cbRuleFilter.Items.AddRange(@(
     "⛔ Тільки локальні блокування",
     "⚪ Тільки білий список",
@@ -1731,32 +1751,32 @@ $cbRuleFilter.SelectedIndex = 0
 $panelBannedActions.Controls.Add($cbRuleFilter)
 
 $btnUnbanSelected = New-Object System.Windows.Forms.Button
-$btnUnbanSelected.Text = "Розблокувати обрані"
-$btnUnbanSelected.Location = New-Object System.Drawing.Point(430, 10)
-$btnUnbanSelected.Size = New-Object System.Drawing.Size(160, 29)
+$btnUnbanSelected.Text = (T "BtnUnbanSelected")
+$btnUnbanSelected.Size = New-Object System.Drawing.Size(150, 28)
 $btnUnbanSelected.Font = New-Object System.Drawing.Font("Segoe UI", 9, [System.Drawing.FontStyle]::Bold)
 $btnUnbanSelected.BackColor = [System.Drawing.Color]::FromArgb(239, 246, 255)
 $btnUnbanSelected.ForeColor = [System.Drawing.Color]::FromArgb(29, 78, 216)
+$btnUnbanSelected.Margin = New-Object System.Windows.Forms.Padding(3, 2, 6, 3)
 $panelBannedActions.Controls.Add($btnUnbanSelected)
 
 $btnManualBan = New-Object System.Windows.Forms.Button
-$btnManualBan.Text = "Заблокувати вручну..."
-$btnManualBan.Location = New-Object System.Drawing.Point(600, 10)
-$btnManualBan.Size = New-Object System.Drawing.Size(165, 29)
+$btnManualBan.Text = (T "BtnManualBan")
+$btnManualBan.Size = New-Object System.Drawing.Size(150, 28)
 $btnManualBan.BackColor = [System.Drawing.Color]::FromArgb(254, 242, 242)
 $btnManualBan.ForeColor = [System.Drawing.Color]::FromArgb(185, 28, 28)
+$btnManualBan.Margin = New-Object System.Windows.Forms.Padding(3, 2, 6, 3)
 $panelBannedActions.Controls.Add($btnManualBan)
 
 $btnUnbanAll = New-Object System.Windows.Forms.Button
-$btnUnbanAll.Text = "Очистити всі блокування"
-$btnUnbanAll.Location = New-Object System.Drawing.Point(775, 10)
-$btnUnbanAll.Size = New-Object System.Drawing.Size(175, 29)
+$btnUnbanAll.Text = (T "BtnUnbanAll")
+$btnUnbanAll.Size = New-Object System.Drawing.Size(155, 28)
+$btnUnbanAll.Margin = New-Object System.Windows.Forms.Padding(3, 2, 6, 3)
 $panelBannedActions.Controls.Add($btnUnbanAll)
 
 $btnExportBanned = New-Object System.Windows.Forms.Button
-$btnExportBanned.Text = "Експорт..."
-$btnExportBanned.Location = New-Object System.Drawing.Point(960, 10)
-$btnExportBanned.Size = New-Object System.Drawing.Size(90, 29)
+$btnExportBanned.Text = (T "BtnExport")
+$btnExportBanned.Size = New-Object System.Drawing.Size(90, 28)
+$btnExportBanned.Margin = New-Object System.Windows.Forms.Padding(3, 2, 6, 3)
 $panelBannedActions.Controls.Add($btnExportBanned)
 
 Set-SmoothButton $btnUnbanSelected 6
@@ -2960,6 +2980,7 @@ function Update-UILanguage {
     $btnBrowsePath.Text = T "BtnBrowse"
     $btnOpenFolder.Text = T "BtnOpenFolder"
     $btnOpenConfigFile.Text = T "BtnOpenConfig"
+    Update-PathPanelLayout
 
     $tabBanned.Text = T "TabBanned"
     if ($tabStats) { $tabStats.Text = T "TabStats" }
